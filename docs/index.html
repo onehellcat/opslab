@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="OpsLab is a local-first DevOps field guide for learning how code becomes a deployed service."
+    />
+    <title>OpsLab — Learn the path from code to cluster</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <a href="#top" class="brand" aria-label="OpsLab home">
+          <span class="brand-mark" aria-hidden="true">
+            <i></i><i></i><i></i>
+          </span>
+          <span>opslab</span>
+        </a>
+
+        <nav aria-label="Main navigation">
+          <a href="#features">Features</a>
+          <a href="#architecture">Architecture</a>
+          <a href="#learn">Learn</a>
+          <a href="#run">Run</a>
+        </nav>
+
+        <a class="topbar-cta" href="https://github.com" target="_blank" rel="noreferrer">
+          View on GitHub
+        </a>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="container hero-inner">
+          <div class="hero-copy">
+            <p class="eyebrow">LOCAL-FIRST DEVOPS LAB</p>
+            <h1>Follow code from commit to cluster.</h1>
+            <p class="lede">
+              OpsLab is a hands-on, opinionated learning environment for understanding
+              how a service moves through source control, CI, containers, health checks,
+              Kubernetes, and infrastructure as code.
+            </p>
+
+            <div class="hero-actions">
+              <a class="primary" href="#run">Run locally</a>
+              <a class="secondary" href="../README.md">Read the project guide</a>
+            </div>
+
+            <ul class="badges" aria-label="Project highlights">
+              <li>Fastify</li>
+              <li>TypeScript</li>
+              <li>Docker</li>
+              <li>Postgres</li>
+              <li>Kubernetes</li>
+              <li>Terraform</li>
+            </ul>
+          </div>
+
+          <div class="hero-visual" aria-label="OpsLab architecture illustration">
+            <div class="orbit orbit-one"></div>
+            <div class="orbit orbit-two"></div>
+            <div class="core-panel">
+              <span class="tiny-label">OpsLab</span>
+              <strong>CODE → BUILD → DEPLOY</strong>
+            </div>
+            <div class="floating-card card-left">
+              <span>Source</span>
+              <strong>GitHub</strong>
+            </div>
+            <div class="floating-card card-right">
+              <span>Runtime</span>
+              <strong>Kubernetes</strong>
+            </div>
+            <div class="floating-card card-bottom">
+              <span>Signal</span>
+              <strong>Health + metrics</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="features" id="features">
+        <div class="container">
+          <div class="section-heading">
+            <p class="eyebrow">WHY THIS EXISTS</p>
+            <h2>Learn the whole delivery path without a cloud bill.</h2>
+          </div>
+
+          <div class="feature-grid">
+            <article class="feature-card">
+              <span class="feature-icon">01</span>
+              <h3>Local-first</h3>
+              <p>
+                Run the full stack on a laptop with Docker Compose, PostgreSQL, and the
+                app itself. It feels production-shaped while staying accessible.
+              </p>
+            </article>
+
+            <article class="feature-card">
+              <span class="feature-icon">02</span>
+              <h3>End-to-end</h3>
+              <p>
+                See the same concepts that appear in real teams: CI gates, container images,
+                networking, health probes, and infrastructure definitions.
+              </p>
+            </article>
+
+            <article class="feature-card">
+              <span class="feature-icon">03</span>
+              <h3>Safe exploration</h3>
+              <p>
+                Use the lab to observe what breaks, how readiness differs from liveness,
+                and what a rollout or a failing dependency actually looks like.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="architecture" id="architecture">
+        <div class="container architecture-inner">
+          <div class="section-heading narrow">
+            <p class="eyebrow">SYSTEM MODEL</p>
+            <h2>From source to service, with real boundaries.</h2>
+          </div>
+
+          <div class="diagram-shell">
+            <img src="./architecture.svg" alt="OpsLab architecture diagram" />
+          </div>
+
+          <div class="architecture-grid">
+            <article>
+              <span>Source</span>
+              <p>Git plus a GitHub Actions workflow exercises install, lint, tests, and image build.</p>
+            </article>
+            <article>
+              <span>Runtime</span>
+              <p>Fastify serves the app and exposes health and metrics routes for live inspection.</p>
+            </article>
+            <article>
+              <span>Data</span>
+              <p>PostgreSQL holds the lab’s service and incident records to model dependency behavior.</p>
+            </article>
+            <article>
+              <span>Delivery</span>
+              <p>Docker, Compose, Kubernetes manifests, and Terraform show how the system scales across stages.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="learn" id="learn">
+        <div class="container">
+          <div class="section-heading">
+            <p class="eyebrow">LEARNING PATH</p>
+            <h2>Follow the same mental model teams use in production.</h2>
+          </div>
+
+          <div class="steps">
+            <div class="step">
+              <span>01</span>
+              <h3>Container basics</h3>
+              <p>See the difference between an image and a running container and how Docker layers affect rebuild behavior.</p>
+            </div>
+            <div class="step">
+              <span>02</span>
+              <h3>Health and readiness</h3>
+              <p>Understand why liveness and readiness are separate signals and when Kubernetes should restart or drain traffic.</p>
+            </div>
+            <div class="step">
+              <span>03</span>
+              <h3>Delivery and rollout</h3>
+              <p>Model the deploy path and understand how safe rollouts preserve service while changes move through the cluster.</p>
+            </div>
+            <div class="step">
+              <span>04</span>
+              <h3>Infrastructure as code</h3>
+              <p>Use Terraform to declare desired resources and compare the live cluster with configuration state.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="run" id="run">
+        <div class="container run-inner">
+          <div>
+            <p class="eyebrow">RUN IT</p>
+            <h2>Get the full lab running in under a minute.</h2>
+          </div>
+
+          <pre><code>git clone https://github.com/&lt;your-account&gt;/opslab.git
+cd opslab
+cd app
+npm install
+npm run dev</code></pre>
+
+          <div class="run-notes">
+            <p>Then open <strong>http://localhost:3000</strong> and explore the interactive pipeline and API playground.</p>
+            <p>For the full stack with PostgreSQL: <strong>docker compose up --build</strong></p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer-inner">
+        <a href="#top" class="brand" aria-label="OpsLab home">
+          <span class="brand-mark" aria-hidden="true">
+            <i></i><i></i><i></i>
+          </span>
+          <span>opslab</span>
+        </a>
+        <p>Built for understanding the machinery behind modern software delivery.</p>
+      </div>
+    </footer>
+  </body>
+</html>
