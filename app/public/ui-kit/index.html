@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Reusable OpsLab interface primitives and examples.">
+  <title>OpsLab UI Kit</title>
+  <link rel="stylesheet" href="/ui-kit/opslab-ui.css">
+  <style>
+    .kit-hero { padding-block: clamp(5rem, 10vw, 9rem); }
+    .kit-hero .ops-lead { margin-top: 2rem; }
+    .kit-section-head { display: flex; align-items: end; justify-content: space-between; gap: 2rem; margin-bottom: 2.5rem; }
+    .kit-section-head p { max-width: 31rem; margin: 0; }
+    .kit-code { padding: 0.15rem 0.35rem; background: #e6e5de; font: 0.75rem var(--ops-font-mono); }
+    @media (max-width: 800px) { .kit-section-head { align-items: start; flex-direction: column; } }
+  </style>
+</head>
+<body class="ops-theme">
+  <div class="ops-noise" aria-hidden="true"></div>
+
+  <header class="ops-container ops-topbar">
+    <a class="ops-brand" href="#top">
+      <span class="ops-brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span>opslab<span style="color:var(--ops-accent-strong)">.</span>ui</span>
+    </a>
+    <nav class="ops-nav" aria-label="UI kit sections">
+      <a href="#tokens">Tokens</a><a href="#components">Components</a><a href="#patterns">Patterns</a>
+    </nav>
+    <span class="ops-badge ops-badge--success">Ready to reuse</span>
+  </header>
+
+  <main id="top">
+    <section class="ops-container kit-hero ops-stack" style="--ops-stack-space:2rem">
+      <div class="ops-eyebrow"><span>01</span> Reusable interface system</div>
+      <h1 class="ops-display">Build tools with <em class="ops-display-outline">character.</em></h1>
+      <p class="ops-lead">A small, framework-free layer for the OpsLab visual language. Import one stylesheet, compose semantic classes, and override tokens to fit the next product.</p>
+      <div class="ops-cluster">
+        <a class="ops-button ops-button--primary" href="#components">Browse components <span>↓</span></a>
+        <button class="ops-button" data-copy='<link rel="stylesheet" href="/ui-kit/opslab-ui.css">'>Copy import</button>
+      </div>
+    </section>
+
+    <section class="ops-section" id="tokens">
+      <div class="ops-container">
+        <div class="kit-section-head">
+          <div class="ops-stack"><div class="ops-eyebrow"><span>02</span> Foundation</div><h2 class="ops-title">Design tokens</h2></div>
+          <p class="ops-lead">Change these CSS custom properties once to theme every component. Accent is intentionally rare; ink, paper, and line do most of the work.</p>
+        </div>
+        <div class="ops-grid" style="--ops-columns:4">
+          <div class="ops-swatch" style="--swatch:#11120f;--swatch-text:#fff"><span>INK</span><code>#11120f</code></div>
+          <div class="ops-swatch" style="--swatch:#f3f2ec"><span>PAPER</span><code>#f3f2ec</code></div>
+          <div class="ops-swatch" style="--swatch:#b8f337"><span>ACCENT</span><code>#b8f337</code></div>
+          <div class="ops-swatch" style="--swatch:#ff714b"><span>WARM</span><code>#ff714b</code></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ops-section" id="components">
+      <div class="ops-container ops-stack" style="--ops-stack-space:3rem">
+        <div class="kit-section-head">
+          <div class="ops-stack"><div class="ops-eyebrow"><span>03</span> Building blocks</div><h2 class="ops-title">Components</h2></div>
+          <p class="ops-lead">The class prefix <span class="kit-code">ops-</span> keeps the kit safe to mix into an existing application.</p>
+        </div>
+
+        <article class="ops-card ops-card--lifted">
+          <header class="ops-card__header"><div><span class="ops-card__meta">Service / Core</span><h3 class="ops-heading">Checkout API</h3></div><span class="ops-badge ops-badge--success">Healthy</span></header>
+          <div class="ops-card__body ops-grid" style="--ops-columns:3">
+            <div class="ops-stat"><strong>99.98%</strong><span>Availability</span></div>
+            <div class="ops-stat"><strong>42ms</strong><span>P95 latency</span></div>
+            <div class="ops-stat"><strong>1.2k</strong><span>Requests / min</span></div>
+          </div>
+          <footer class="ops-card__footer ops-cluster">
+            <button class="ops-button ops-button--accent">Open service <span>→</span></button>
+            <button class="ops-button ops-button--quiet">View logs</button>
+          </footer>
+        </article>
+
+        <div class="ops-grid" style="--ops-columns:2">
+          <form class="ops-card" onsubmit="return false">
+            <header class="ops-card__header"><h3 class="ops-heading">Create monitor</h3><span class="ops-card__meta">Required fields</span></header>
+            <div class="ops-card__body ops-stack" style="--ops-stack-space:1.25rem">
+              <label class="ops-field"><span class="ops-label">Monitor name</span><input class="ops-input" value="Checkout readiness" autocomplete="off"><small class="ops-help">Use a name your on-call engineer will recognize.</small></label>
+              <label class="ops-field"><span class="ops-label">Environment</span><select class="ops-select"><option>Production</option><option>Staging</option><option>Development</option></select></label>
+            </div>
+            <footer class="ops-card__footer"><button class="ops-button ops-button--primary">Save monitor</button></footer>
+          </form>
+
+          <div class="ops-terminal">
+            <div class="ops-terminal__bar"><i></i><i></i><i></i><span>deploy.log</span></div>
+            <pre><span class="ops-prompt">$</span> kubectl rollout status deploy/api
+<span class="ops-comment">→ Waiting for 2 replicas…</span>
+<span class="ops-ok">✓ Deployment successfully rolled out</span></pre>
+          </div>
+        </div>
+
+        <div class="ops-table-wrap">
+          <table class="ops-table">
+            <thead><tr><th>Service</th><th>Owner</th><th>Status</th><th>Version</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Authentication</strong></td><td>Security</td><td><span class="ops-badge ops-badge--warning">Degraded</span></td><td class="ops-mono">v2.8.1</td></tr>
+              <tr><td><strong>Checkout API</strong></td><td>Platform</td><td><span class="ops-badge ops-badge--success">Healthy</span></td><td class="ops-mono">v4.12.0</td></tr>
+              <tr><td><strong>Inventory</strong></td><td>Operations</td><td><span class="ops-badge ops-badge--neutral">Paused</span></td><td class="ops-mono">v1.4.6</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="ops-section" id="patterns">
+      <div class="ops-container ops-stack" style="--ops-stack-space:2rem">
+        <div class="kit-section-head">
+          <div class="ops-stack"><div class="ops-eyebrow"><span>04</span> Interaction recipe</div><h2 class="ops-title">Progressive status</h2></div>
+          <p class="ops-lead">Operational interfaces should pair color with words, preserve visible state, and make the next action unambiguous.</p>
+        </div>
+        <div class="ops-callout"><span class="ops-callout__icon">↗</span><div><strong>Deployment is moving through staging</strong><p>No action is needed. The progress indicator and status copy communicate the same information without relying on color alone.</p></div></div>
+        <button class="ops-card ops-card__body ops-stack" id="demo-progress" style="width:100%;text-align:left;cursor:pointer;--ops-stack-space:.75rem">
+          <span class="ops-card__meta">Click to advance deployment</span>
+          <span class="ops-cluster" style="justify-content:space-between"><strong>Rollout progress</strong><span class="ops-mono">38%</span></span>
+          <span class="ops-progress"><i id="progress-bar" style="--ops-progress:38%"></i></span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="ops-container ops-topbar">
+    <span class="ops-card__meta">OpsLab UI · framework-free</span>
+    <a class="ops-button ops-button--quiet" href="/">Back to OpsLab</a>
+  </footer>
+  <script src="/ui-kit/ui-kit.js" defer></script>
+</body>
+</html>

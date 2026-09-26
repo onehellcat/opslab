@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An interactive guide to the OpsLab DevOps lifecycle.">
+  <title>OpsLab — Learn the system</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="noise"></div>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="OpsLab home"><span class="brand-mark"><i></i><i></i><i></i></span><span>opslab<span class="brand-dot">.</span></span></a>
+    <nav aria-label="Main navigation"><a class="active" href="#pipeline">Pipeline</a><a href="#architecture">Architecture</a><a href="#request-path">Request path</a><a href="#concepts">Knowledge</a><a href="#playground">Playground</a></nav>
+    <div class="header-meta"><span class="live-dot"></span> local lab <kbd>v0.1</kbd></div>
+  </header>
+
+  <main id="top">
+    <section class="hero reveal">
+      <div class="eyebrow"><span>01</span> Your local DevOps field guide</div>
+      <h1>See how your code<br><em>becomes a service.</em></h1>
+      <p class="hero-copy">Follow one change from commit to container to Kubernetes. Every concept below maps to a real file running in this repository.</p>
+      <div class="hero-actions"><a class="button primary" href="#pipeline">Explore the pipeline <span>↓</span></a><button class="button ghost" id="quick-health"><span class="pulse-icon"></span> Ping the API</button></div>
+      <div class="hero-status" id="health-toast" aria-live="polite"></div>
+      <div class="orbit" aria-hidden="true"><div class="orbit-ring ring-one"><span></span></div><div class="orbit-ring ring-two"><span></span></div><div class="core"><b>OPS</b><small>LAB</small></div><span class="orbit-label label-code">CODE</span><span class="orbit-label label-build">BUILD</span><span class="orbit-label label-ship">SHIP</span></div>
+    </section>
+
+    <section class="stat-strip reveal" aria-label="Project summary"><div><strong>08</strong><span>API routes</span></div><div><strong>04</strong><span>CI stages</span></div><div><strong>02</strong><span>K8s replicas</span></div><div><strong>100%</strong><span>Local-first</span></div></section>
+
+    <section class="section pipeline-section" id="pipeline">
+      <div class="section-heading reveal"><div><div class="eyebrow"><span>02</span> Continuous integration</div><h2>A commit’s journey</h2></div><p>Trigger a simulated run, then select a stage to see what the runner does, why that boundary exists, and how to reproduce the check locally.</p></div>
+      <div class="pipeline-shell reveal">
+        <div class="pipeline-toolbar"><div class="commit-info"><span class="branch-icon">⑂</span><div><b>main</b><small>feat: learn the delivery path</small></div></div><button id="run-pipeline" class="run-button"><span>▶</span> Run pipeline</button></div>
+        <div class="pipeline-track" id="pipeline-track">
+          <div class="track-line"><div class="track-progress"></div></div>
+          <button class="stage active" data-stage="checkout"><span class="stage-index">01</span><span class="stage-icon">⌘</span><b>Checkout</b><small>actions/checkout@v4</small><i></i></button>
+          <button class="stage" data-stage="install"><span class="stage-index">02</span><span class="stage-icon">↓</span><b>Install</b><small>npm ci</small><i></i></button>
+          <button class="stage" data-stage="verify"><span class="stage-index">03</span><span class="stage-icon">✓</span><b>Verify</b><small>typecheck + tests</small><i></i></button>
+          <button class="stage" data-stage="image"><span class="stage-index">04</span><span class="stage-icon">◇</span><b>Package</b><small>Docker image</small><i></i></button>
+        </div>
+        <div class="stage-detail" id="stage-detail">
+          <div><span class="detail-kicker">STAGE 01 · SOURCE</span><h3>Bring the exact code into the runner</h3><p>GitHub Actions starts with a clean Ubuntu machine. Checkout copies this repository into that temporary runner so every next command uses the committed source.</p></div>
+          <div class="terminal"><div class="terminal-head"><span></span><span></span><span></span><b>workflow.yml</b></div><pre><code><span class="prompt">$</span> actions/checkout@v4
+<span class="muted">→ Repository synced at 8f31ca</span>
+<span class="success">✓ Working tree ready</span></code></pre></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section architecture-section" id="architecture">
+      <div class="section-heading reveal"><div><div class="eyebrow"><span>03</span> Runtime architecture</div><h2>From laptop to cluster</h2></div><p>Switch environments and select a component to learn its responsibility, the problem it solves, and the real project configuration behind it.</p></div>
+      <div class="arch-card reveal">
+        <div class="tab-list" role="tablist"><button class="tab active" data-view="compose">Docker Compose</button><button class="tab" data-view="kubernetes">Kubernetes</button><button class="tab" data-view="terraform">Terraform</button></div>
+        <div class="arch-content"><div class="diagram" id="diagram"></div><aside class="concept-panel" id="concept-panel"></aside></div>
+      </div>
+    </section>
+
+    <section class="section request-path-section" id="request-path">
+      <div class="section-heading reveal"><div><div class="eyebrow"><span>04</span> Request lifecycle</div><h2>Follow one packet</h2></div><p>Trace a request from the browser to PostgreSQL. Each hop explains the protocol boundary, the work performed there, and how to observe it yourself.</p></div>
+      <div class="trace-shell reveal">
+        <div class="trace-toolbar"><div><span class="trace-id">TRACE 7F3A</span><b>GET /api/services</b></div><button id="run-trace" class="run-button"><span>▶</span> Trace request</button></div>
+        <div class="trace-map" id="trace-map">
+          <div class="trace-line"><i id="trace-progress"></i></div>
+          <button class="trace-hop active" data-hop="client"><span class="hop-number">01</span><span class="hop-icon">◎</span><b>Browser</b><small>HTTP/1.1</small></button>
+          <button class="trace-hop" data-hop="nat"><span class="hop-number">02</span><span class="hop-icon">⇥</span><b>Port publish</b><small>3000 → 3000</small></button>
+          <button class="trace-hop" data-hop="fastify"><span class="hop-number">03</span><span class="hop-icon">⬡</span><b>Fastify</b><small>route handler</small></button>
+          <button class="trace-hop" data-hop="pool"><span class="hop-number">04</span><span class="hop-icon">≋</span><b>pg Pool</b><small>TCP :5432</small></button>
+          <button class="trace-hop" data-hop="database"><span class="hop-number">05</span><span class="hop-icon">▱</span><b>PostgreSQL</b><small>services table</small></button>
+        </div>
+        <div class="trace-detail" id="trace-detail"></div>
+        <div class="waterfall" aria-label="Illustrative request timing waterfall">
+          <div class="waterfall-head"><span>ILLUSTRATIVE TIMING</span><span>0 ms</span><span>5 ms</span><span>10 ms</span><span>15 ms</span></div>
+          <div><b>Container routing</b><i style="--start:2%;--width:18%"></i><small>2 ms</small></div>
+          <div><b>Fastify handler</b><i style="--start:20%;--width:12%"></i><small>1 ms</small></div>
+          <div><b>Pool + SQL query</b><i style="--start:32%;--width:46%"></i><small>7 ms</small></div>
+          <div><b>JSON response</b><i style="--start:78%;--width:15%"></i><small>2 ms</small></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section learn-section" id="concepts">
+      <div class="section-heading reveal"><div><div class="eyebrow"><span>05</span> Core concepts</div><h2>Build your mental model</h2></div><p>Open each concept for a working model, follow its path into the repository, and try a safe experiment before marking it complete.</p></div>
+      <div class="learning-path reveal" aria-label="Suggested learning path">
+        <div><span>FOUNDATION · 01–03</span><b>Package, operate, declare</b><p>Begin with containers, health signals, and infrastructure state. These explain what is deployed and how the platform maintains it.</p></div>
+        <i aria-hidden="true">→</i>
+        <div><span>OPERATIONS · 04–06</span><b>Connect, change, observe</b><p>Then follow traffic between services, release a new version safely, and build the signals needed to understand production behavior.</p></div>
+      </div>
+      <div class="lesson-grid reveal" id="lesson-grid">
+        <article class="lesson-card" data-lesson="container">
+          <div class="lesson-top"><span>01 / CONTAINER</span><button class="lesson-complete" aria-label="Mark container lesson complete" title="Mark complete">○</button></div>
+          <div class="lesson-glyph">◇</div><h3>Image vs. container</h3>
+          <p><strong>An image is a blueprint:</strong> immutable filesystem layers and startup metadata. A container is one isolated, running instance of that blueprint.</p>
+          <button class="lesson-expand" aria-expanded="false" aria-controls="container-details"><span>Explore concept</span><i>+</i></button>
+          <div class="lesson-details" id="container-details" hidden>
+            <div><span>MENTAL MODEL</span><p><b>Dockerfile → image → container.</b> Build produces a reusable artifact. Run adds a process, network identity, and temporary writable layer. Deleting a container does not delete its image.</p></div>
+            <div><span>IN THIS PROJECT</span><p><code>app/Dockerfile</code> compiles TypeScript in a builder stage. The runtime stage copies only production files, listens on port 3000, and runs as the non-root <code>node</code> user.</p></div>
+            <div><span>IMAGE LAYERS &amp; CACHE</span><p>Each Dockerfile instruction creates or reuses a content-addressed layer. Copying dependency manifests before application source lets Docker reuse the expensive install layer when only source code changes. A changed instruction invalidates that layer and every layer after it.</p></div>
+            <div><span>RUNTIME ISOLATION</span><p>A container is not a small virtual machine. It is a normal host process isolated with Linux namespaces and constrained with cgroups. It shares the host kernel, which makes startup fast, but its filesystem and network view appear separate.</p></div>
+            <div><span>DATA &amp; FAILURE</span><p>The writable container layer is ephemeral: replacing the container loses changes stored there. Databases therefore mount a volume. Logs should go to stdout and configuration should enter through environment variables so the same image can run unchanged in each environment.</p></div>
+            <div><span>COMMON MISCONCEPTION</span><p><code>localhost</code> inside a container means that same container—not your laptop and not another Compose service. Containers reach peers through network DNS names such as <code>postgres</code>; published ports are primarily how the host reaches a container.</p></div>
+            <div class="lesson-experiment"><span>TRY IT</span><p>Build the image, then inspect its immutable layer history.</p><button data-lesson-copy="docker history opslab-api:local"><code>docker history opslab-api:local</code><i>Copy</i></button></div>
+          </div>
+          <footer><code>app/Dockerfile</code><span>5 min</span></footer>
+        </article>
+        <article class="lesson-card" data-lesson="health">
+          <div class="lesson-top"><span>02 / RELIABILITY</span><button class="lesson-complete" aria-label="Mark health lesson complete" title="Mark complete">○</button></div>
+          <div class="lesson-glyph">♡</div><h3>Live is not ready</h3>
+          <p><strong>Liveness asks “restart me?”</strong> Readiness asks “send me traffic?” The two signals deliberately control different Kubernetes behaviors.</p>
+          <button class="lesson-expand" aria-expanded="false" aria-controls="health-details"><span>Explore concept</span><i>+</i></button>
+          <div class="lesson-details" id="health-details" hidden>
+            <div><span>MENTAL MODEL</span><p><b>Alive + unready is a valid state.</b> An unready pod stays running but leaves Service endpoints. A repeatedly non-live pod is restarted by the kubelet.</p></div>
+            <div><span>IN THIS PROJECT</span><p><code>/health/live</code> proves Node.js responds. <code>/health/ready</code> also reports database availability. Probe timings and paths live in <code>kubernetes/deployment.yaml</code>.</p></div>
+            <div><span>PROBE LIFECYCLE</span><p>After the initial delay, the kubelet calls each configured endpoint on its own schedule. One failed check does not immediately act: <code>failureThreshold</code> controls how many consecutive failures are required. A later successful readiness check automatically returns the pod to traffic.</p></div>
+            <div><span>WHY TWO SIGNALS</span><p>Liveness detects a process that cannot recover, such as a deadlocked event loop. Readiness represents temporary inability to serve useful work, such as startup, draining, or dependency loss. Using one strict check for both can turn a recoverable outage into repeated restarts.</p></div>
+            <div><span>DEPENDENCY POLICY</span><p>Not every dependency belongs in every check. Liveness should usually avoid downstream services: restarting this API cannot repair PostgreSQL. Readiness may include a dependency only when the API truly cannot serve meaningful requests without it.</p></div>
+            <div><span>DEBUGGING SIGNALS</span><p>A restart count that keeps rising points toward liveness failures or process crashes. A running pod with <code>Ready=False</code> points toward readiness. <code>kubectl describe pod</code> shows probe failures and events; application logs explain what the endpoint observed.</p></div>
+            <div class="lesson-experiment"><span>TRY IT</span><p>Compare both responses while the local API is running.</p><button data-lesson-copy="curl http://localhost:3000/health/ready"><code>curl localhost:3000/health/ready</code><i>Copy</i></button></div>
+          </div>
+          <footer><code>kubernetes/deployment.yaml</code><span>5 min</span></footer>
+        </article>
+        <article class="lesson-card" data-lesson="iac">
+          <div class="lesson-top"><span>03 / AUTOMATION</span><button class="lesson-complete" aria-label="Mark IaC lesson complete" title="Mark complete">○</button></div>
+          <div class="lesson-glyph">⌁</div><h3>Infrastructure as code</h3>
+          <p><strong>Configuration describes the desired result.</strong> Terraform compares that intent with saved state and real infrastructure before proposing changes.</p>
+          <button class="lesson-expand" aria-expanded="false" aria-controls="iac-details"><span>Explore concept</span><i>+</i></button>
+          <div class="lesson-details" id="iac-details" hidden>
+            <div><span>MENTAL MODEL</span><p><b>Configuration + state + live API → plan.</b> Resource references form a graph, allowing Terraform to order work instead of relying on a hand-written command sequence.</p></div>
+            <div><span>IN THIS PROJECT</span><p><code>terraform/main.tf</code> declares a namespace, ConfigMap, Deployment, and Service. <code>providers.tf</code> configures the adapter that translates them into Kubernetes API calls.</p></div>
+            <div><span>HOW PLAN IS CALCULATED</span><p>Terraform refreshes known resources from the provider, compares their current attributes with configuration and state, then classifies differences as create, update, replace, or destroy. The plan is a proposal; infrastructure changes only when it is applied.</p></div>
+            <div><span>WHAT STATE DOES</span><p>State binds a Terraform address such as <code>kubernetes_deployment_v1.api</code> to one real API object. It also stores provider-returned attributes needed for future comparisons. State is operational data, not a cache that can always be discarded safely.</p></div>
+            <div><span>DRIFT &amp; OWNERSHIP</span><p>A manual cluster edit creates drift between configuration and reality. The next plan may reverse that edit because Terraform treats configuration as the declared owner. Emergency changes should be captured back in code once the incident is stable.</p></div>
+            <div><span>TEAM SAFETY</span><p>Production teams normally store state in a remote backend with locking, encryption, and version history. Locking prevents two applies from racing; restricted access matters because state can contain resource identifiers and sensitive values.</p></div>
+            <div class="lesson-experiment"><span>TRY IT</span><p>Preview proposed actions. A plan reads state but does not apply infrastructure changes.</p><button data-lesson-copy="terraform -chdir=terraform plan"><code>terraform -chdir=terraform plan</code><i>Copy</i></button></div>
+          </div>
+          <footer><code>terraform/main.tf</code><span>6 min</span></footer>
+        </article>
+        <article class="lesson-card" data-lesson="networking">
+          <div class="lesson-top"><span>04 / NETWORKING</span><button class="lesson-complete" aria-label="Mark networking lesson complete" title="Mark complete">○</button></div>
+          <div class="lesson-glyph">⇄</div><h3>Names, ports, and services</h3>
+          <p><strong>A service name is a stable promise.</strong> Containers and pods are replaceable, so callers need DNS and virtual service endpoints rather than hard-coded process addresses.</p>
+          <button class="lesson-expand" aria-expanded="false" aria-controls="networking-details"><span>Explore concept</span><i>+</i></button>
+          <div class="lesson-details" id="networking-details" hidden>
+            <div><span>MENTAL MODEL</span><p><b>Name → virtual endpoint → healthy backend.</b> DNS answers where a service can be reached. A port identifies the listening application on that address. A proxy or Service chooses one currently healthy backend.</p></div>
+            <div><span>COMPOSE NETWORKING</span><p>Compose creates a private bridge network and DNS entries from service names. The API reaches <code>postgres:5432</code>; it must not use <code>localhost</code>, which would refer to the API container itself.</p></div>
+            <div><span>KUBERNETES NETWORKING</span><p>Each pod receives an address, but that address changes when the pod is replaced. A ClusterIP Service provides stable DNS and selects ready pods by label. Its <code>port</code> is client-facing; <code>targetPort</code> is where the container listens.</p></div>
+            <div><span>PORT PUBLISHING</span><p><code>3000:3000</code> maps host port 3000 to container port 3000. Publishing is required for host-to-container access, but containers on the same Compose network communicate directly through service names and container ports.</p></div>
+            <div><span>COMMON FAILURES</span><p><code>Connection refused</code> usually means the address resolved but nothing accepted that port. A DNS error means the name could not resolve. A timeout may indicate filtering, an unreachable route, or a process too overloaded to respond.</p></div>
+            <div><span>DEBUGGING ORDER</span><p>Check from the caller’s point of view: resolve the name, verify the address, test the TCP port, send the application request, then inspect endpoints and server logs. Testing only from the server can hide network-boundary failures.</p></div>
+            <div class="lesson-experiment"><span>TRY IT</span><p>See which pod addresses currently back the stable Kubernetes Service.</p><button data-lesson-copy="kubectl get svc,endpoints -n opslab"><code>kubectl get svc,endpoints -n opslab</code><i>Copy</i></button></div>
+          </div>
+          <footer><code>kubernetes/service.yaml</code><span>7 min</span></footer>
+        </article>
+        <article class="lesson-card" data-lesson="rollouts">
+          <div class="lesson-top"><span>05 / DELIVERY</span><button class="lesson-complete" aria-label="Mark delivery lesson complete" title="Mark complete">○</button></div>
+          <div class="lesson-glyph">↻</div><h3>Safe rollouts and rollback</h3>
+          <p><strong>A deployment changes capacity gradually.</strong> Kubernetes creates new pods, waits for readiness, and removes old pods while preserving the desired replica count.</p>
+          <button class="lesson-expand" aria-expanded="false" aria-controls="rollouts-details"><span>Explore concept</span><i>+</i></button>
+          <div class="lesson-details" id="rollouts-details" hidden>
+            <div><span>MENTAL MODEL</span><p><b>Desired version + rollout policy + health signals.</b> A Deployment controller continuously moves actual pods toward the declared template without requiring an operator to replace each instance manually.</p></div>
+            <div><span>ROLLING UPDATE</span><p><code>maxSurge</code> limits extra new pods and <code>maxUnavailable</code> limits missing capacity. Their combination controls rollout speed, temporary resource use, and how much traffic capacity can be lost during change.</p></div>
+            <div><span>READINESS GATE</span><p>A new pod does not count as available until readiness succeeds. If the new version never becomes ready, the rollout stops progressing while old healthy replicas can remain in service, depending on the rollout settings.</p></div>
+            <div><span>IMMUTABLE VERSIONS</span><p>Use an immutable image digest or unique version tag for each build. Reusing a mutable tag such as <code>latest</code> makes it difficult to prove which bytes are running and can produce different results across nodes.</p></div>
+            <div><span>ROLLBACK REALITY</span><p><code>kubectl rollout undo</code> restores a previous pod template, not external state. A backward-incompatible database migration may prevent old application code from working, so data changes need an explicit compatibility and recovery plan.</p></div>
+            <div><span>WHEN ROLLOUTS FAIL</span><p>Inspect Deployment conditions, ReplicaSets, pod events, readiness output, and logs. Common causes include missing configuration, invalid image credentials, insufficient cluster capacity, and a startup path that exceeds probe timing.</p></div>
+            <div class="lesson-experiment"><span>TRY IT</span><p>Watch Kubernetes report whether the new ReplicaSet becomes available.</p><button data-lesson-copy="kubectl rollout status deployment/opslab-api -n opslab"><code>kubectl rollout status deployment/opslab-api -n opslab</code><i>Copy</i></button></div>
+          </div>
+          <footer><code>kubernetes/deployment.yaml</code><span>8 min</span></footer>
+        </article>
+        <article class="lesson-card" data-lesson="observability">
+          <div class="lesson-top"><span>06 / OBSERVABILITY</span><button class="lesson-complete" aria-label="Mark observability lesson complete" title="Mark complete">○</button></div>
+          <div class="lesson-glyph">⌁</div><h3>Logs, metrics, and traces</h3>
+          <p><strong>Observability explains unknown failures.</strong> Logs preserve events, metrics summarize behavior over time, and traces connect work across service boundaries.</p>
+          <button class="lesson-expand" aria-expanded="false" aria-controls="observability-details"><span>Explore concept</span><i>+</i></button>
+          <div class="lesson-details" id="observability-details" hidden>
+            <div><span>THREE SIGNALS</span><p><b>Logs</b> answer “what happened here?” <b>Metrics</b> answer “how is the system behaving overall?” <b>Traces</b> answer “where did this request spend time?” They overlap, but each supports a different investigation scale.</p></div>
+            <div><span>IN THIS PROJECT</span><p><code>GET /metrics</code> exposes request duration, incident count, and service count as JSON. It demonstrates the signal, though production scrapers commonly expect a standard exposition format such as Prometheus text.</p></div>
+            <div><span>USEFUL METRICS</span><p>Start with request rate, error rate, and duration. Add saturation signals for constrained resources such as CPU, memory, connection pools, and queues. Prefer measurements that describe user-visible behavior over counts that merely look busy.</p></div>
+            <div><span>STRUCTURED LOGS</span><p>Machine-readable logs use consistent fields such as timestamp, level, service, request ID, route, and outcome. Write them to stdout so the runtime can collect them. Never log passwords, tokens, or unnecessary personal data.</p></div>
+            <div><span>CARDINALITY</span><p>A metric label creates a new time series for every distinct value. Bounded labels such as method or route are useful; unbounded values such as user ID or raw URL can create millions of series and overwhelm monitoring storage.</p></div>
+            <div><span>FROM SLI TO ALERT</span><p>An SLI is a measured behavior such as successful-request ratio. An SLO is its target over a window. Good alerts warn when error-budget consumption threatens the SLO and include enough context for an operator to choose an action.</p></div>
+            <div class="lesson-experiment"><span>TRY IT</span><p>Read the current application signals, then connect each value to a question it can answer.</p><button data-lesson-copy="curl http://localhost:3000/metrics"><code>curl localhost:3000/metrics</code><i>Copy</i></button></div>
+          </div>
+          <footer><code>GET /metrics</code><span>8 min</span></footer>
+        </article>
+      </div>
+      <div class="progress-card reveal"><div><span>LEARNING PROGRESS</span><b id="progress-label">0 of 6 complete</b></div><div class="progress-bar"><i id="lesson-progress"></i></div><small id="progress-percent">0%</small></div>
+    </section>
+
+    <section class="section playground-section" id="playground">
+      <div class="section-heading reveal"><div><div class="eyebrow"><span>06</span> API playground</div><h2>Touch the running system</h2></div><p>Send real requests to Fastify, then relate the status code, timing, and JSON body to the selected endpoint’s operational purpose.</p></div>
+      <div class="playground reveal">
+        <div class="request-panel">
+          <div class="request-line"><select id="method" aria-label="HTTP method"><option>GET</option></select><select id="endpoint" aria-label="API endpoint"><option value="/health/live">/health/live</option><option value="/health/ready">/health/ready</option><option value="/api/services">/api/services</option><option value="/api/incidents">/api/incidents</option><option value="/metrics">/metrics</option></select><button id="send-request">Send <span>→</span></button></div>
+          <div class="request-note"><span class="live-dot"></span> Requests target <code>localhost:3000</code></div>
+          <div class="endpoint-guide"><h3>What to notice</h3><p id="endpoint-note">A liveness probe only proves the Node.js process can answer. Kubernetes restarts the container if this repeatedly fails.</p></div>
+        </div>
+        <div class="response-panel"><div class="response-head"><div><span></span> RESPONSE</div><div><b id="response-status">READY</b><span id="response-time">— ms</span></div></div><pre id="response-body"><span class="json-muted">// Choose an endpoint and send a request.</span></pre></div>
+      </div>
+    </section>
+
+    <section class="next-step reveal">
+      <span class="eyebrow"><span>07</span> Next experiment</span><h2>Break it on purpose.</h2><p>Change the readiness path in <code>kubernetes/deployment.yaml</code>, deploy, and watch Kubernetes remove the pods from service traffic.</p>
+      <button class="copy-command" data-copy="kubectl get pods -n opslab -w"><code>kubectl get pods -n opslab -w</code><span>Copy command</span></button>
+    </section>
+  </main>
+
+  <footer><a class="brand" href="#top"><span class="brand-mark"><i></i><i></i><i></i></span><span>opslab<span class="brand-dot">.</span></span></a><p>Built to understand the machinery.</p><span>Node.js · Docker · Kubernetes · Terraform</span></footer>
+  <script src="/app.js" defer></script>
+</body>
+</html>

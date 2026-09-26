@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: opslab
+          POSTGRES_USER: opslab
+          POSTGRES_PASSWORD: development
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U opslab -d opslab"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    defaults:
+      run:
+        working-directory: app
+
+    env:
+      NODE_ENV: test
+      PORT: 3000
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_NAME: opslab
+      DATABASE_USER: opslab
+      DATABASE_PASSWORD: development
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build Docker image
+        run: docker build -t opslab-api:test .

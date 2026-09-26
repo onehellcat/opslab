@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opslab-api
+  namespace: opslab
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: opslab-api
+  template:
+    metadata:
+      labels:
+        app: opslab-api
+    spec:
+      containers:
+        - name: opslab-api
+          image: opslab-api:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: opslab-config
+                  key: NODE_ENV
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: opslab-config
+                  key: PORT
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 15
