@@ -14,7 +14,7 @@
   <div class="noise"></div>
   <header class="topbar">
     <a class="brand" href="#top" aria-label="OpsLab home"><span class="brand-mark"><i></i><i></i><i></i></span><span>opslab<span class="brand-dot">.</span></span></a>
-    <nav aria-label="Main navigation"><a class="active" href="#pipeline">Pipeline</a><a href="#architecture">Architecture</a><a href="#request-path">Request path</a><a href="#concepts">Knowledge</a><a href="#playground">Playground</a></nav>
+    <nav aria-label="Main navigation"><a class="active" href="#pipeline">Pipeline</a><a href="#architecture">Architecture</a><a href="#request-path">Request path</a><a href="#concepts">Knowledge</a><a href="#playground">Playground</a><a href="#operations">Operate</a></nav>
     <div class="header-meta"><span class="live-dot"></span> local lab <kbd>v0.1</kbd></div>
   </header>
 
@@ -193,16 +193,29 @@
       <div class="section-heading reveal"><div><div class="eyebrow"><span>06</span> API playground</div><h2>Touch the running system</h2></div><p>Send real requests to Fastify, then relate the status code, timing, and JSON body to the selected endpoint’s operational purpose.</p></div>
       <div class="playground reveal">
         <div class="request-panel">
-          <div class="request-line"><select id="method" aria-label="HTTP method"><option>GET</option></select><select id="endpoint" aria-label="API endpoint"><option value="/health/live">/health/live</option><option value="/health/ready">/health/ready</option><option value="/api/services">/api/services</option><option value="/api/incidents">/api/incidents</option><option value="/metrics">/metrics</option></select><button id="send-request">Send <span>→</span></button></div>
+          <div class="request-line"><select id="method" aria-label="HTTP method"><option>GET</option><option>POST</option></select><select id="endpoint" aria-label="API endpoint"><option value="/health/live">/health/live</option><option value="/health/ready">/health/ready</option><option value="/api/services">/api/services</option><option value="/api/incidents">/api/incidents</option><option value="/metrics">/metrics</option></select><button id="send-request">Send <span>→</span></button></div>
           <div class="request-note"><span class="live-dot"></span> Requests target <code>localhost:3000</code></div>
+          <label class="request-body" for="request-json">REQUEST BODY <textarea id="request-json" spellcheck="false" aria-label="JSON request body">{}</textarea></label>
+          <button class="curl-copy" id="copy-curl">Copy as curl</button>
           <div class="endpoint-guide"><h3>What to notice</h3><p id="endpoint-note">A liveness probe only proves the Node.js process can answer. Kubernetes restarts the container if this repeatedly fails.</p></div>
         </div>
         <div class="response-panel"><div class="response-head"><div><span></span> RESPONSE</div><div><b id="response-status">READY</b><span id="response-time">— ms</span></div></div><pre id="response-body"><span class="json-muted">// Choose an endpoint and send a request.</span></pre></div>
       </div>
     </section>
 
+    <section class="section operations-section" id="operations">
+      <div class="section-heading reveal"><div><div class="eyebrow"><span>07</span> Operations console</div><h2>Observe, disturb, recover.</h2></div><p>A safe, browser-only simulation turns production signals into a practical incident exercise. It never changes your API, database, Docker environment, or cluster.</p></div>
+      <div class="ops-grid reveal">
+        <article class="ops-card status-card"><div class="ops-card-head"><span>LIVE SYSTEM SNAPSHOT</span><button id="refresh-ops">Refresh</button></div><div class="ops-stats"><div><small>API</small><b id="ops-api">Checking…</b></div><div><small>DATABASE</small><b id="ops-db">Checking…</b></div><div><small>OPEN INCIDENTS</small><b id="ops-incidents">—</b></div><div><small>SERVICES</small><b id="ops-services">—</b></div></div><div class="latency-line"><span>REQUEST LATENCY</span><b id="ops-latency">— ms</b><i><em id="latency-bar"></em></i></div><p class="ops-hint">This panel reads the real health, metrics, and incident endpoints exposed by this local app.</p></article>
+        <article class="ops-card"><div class="ops-card-head"><span>INCIDENT LAB</span><span id="scenario-state">NORMAL</span></div><h3 id="scenario-title">Choose a safe failure mode</h3><p id="scenario-copy">Practice the diagnostic order: observe user impact, inspect health signals, identify the failing boundary, then choose the smallest safe recovery.</p><div class="scenario-actions"><button data-scenario="database">Simulate database latency</button><button data-scenario="readiness">Simulate failed readiness</button><button class="ghost-action" id="reset-scenario">Reset lab</button></div><ol class="incident-steps" id="incident-steps"><li>Pick a scenario to begin the guided response.</li><li>No local infrastructure will be modified.</li></ol></article>
+        <article class="ops-card deployment-card"><div class="ops-card-head"><span>DEPLOYMENT LAB</span><span id="rollout-state">IDLE</span></div><h3>Roll out v0.2.0 safely</h3><p>Watch a simulated two-replica rolling update. New pods must become ready before old capacity leaves service.</p><div class="rollout-track"><div><span>v0.1</span><i id="old-pods" class="pod-ready">2 ready</i></div><div><span>v0.2</span><i id="new-pods">0 ready</i></div></div><button id="start-rollout">Start rollout</button><button class="ghost-action" id="rollback">Rollback</button><p class="rollout-note" id="rollout-note">The simulator models Kubernetes rollout status; it does not call kubectl.</p></article>
+      </div>
+      <div class="observability-guide reveal"><div><span>LOGS</span><b>What happened?</b><p>Use a request ID and timestamp to reconstruct one event.</p></div><div><span>METRICS</span><b>How is it behaving?</b><p>Use rates, errors, and duration to see trends and impact.</p></div><div><span>TRACES</span><b>Where did time go?</b><p>Follow one request across boundaries—the request map above is a trace model.</p></div></div>
+      <div class="onboarding reveal"><div><span>FIRST-RUN CHECKLIST</span><h3>From clone to confident operator</h3></div><div id="onboarding-list"><label><input type="checkbox" data-onboard="app"> Run the application locally</label><label><input type="checkbox" data-onboard="api"> Send a real API request</label><label><input type="checkbox" data-onboard="incident"> Complete an incident simulation</label><label><input type="checkbox" data-onboard="rollout"> Complete a rollout simulation</label></div><b id="onboarding-progress">0 / 4 complete</b></div>
+    </section>
+
     <section class="next-step reveal">
-      <span class="eyebrow"><span>07</span> Next experiment</span><h2>Break it on purpose.</h2><p>Change the readiness path in <code>kubernetes/deployment.yaml</code>, deploy, and watch Kubernetes remove the pods from service traffic.</p>
+      <span class="eyebrow"><span>08</span> Next experiment</span><h2>Break it on purpose.</h2><p>Change the readiness path in <code>kubernetes/deployment.yaml</code>, deploy, and watch Kubernetes remove the pods from service traffic.</p>
       <button class="copy-command" data-copy="kubectl get pods -n opslab -w"><code>kubectl get pods -n opslab -w</code><span>Copy command</span></button>
     </section>
   </main>
