@@ -68,4 +68,31 @@ describe('OpsLab API', () => {
       status: 'open',
     });
   });
+
+  it('exposes an operational summary and Prometheus-compatible metrics', async () => {
+    const [summary, metrics] = await Promise.all([
+      app.inject({ method: 'GET', url: '/api/ops/summary' }),
+      app.inject({ method: 'GET', url: '/metrics' }),
+    ]);
+
+    expect(summary.statusCode).toBe(200);
+    expect(summary.json()).toMatchObject({
+      http_requests_total: expect.any(Number),
+      services_total: expect.any(Number),
+      active_incidents: expect.any(Number),
+    });
+    expect(metrics.headers['content-type']).toContain('text/plain');
+    expect(metrics.body).toContain('opslab_http_requests_total');
+  });
+
+  it('enforces the read-only viewer role for write routes', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/incidents',
+      headers: { 'x-opslab-role': 'viewer' },
+      payload: { title: 'Blocked write', severity: 'low', status: 'open' },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
 });

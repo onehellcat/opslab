@@ -3,9 +3,32 @@ import { Pool } from 'pg';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 const app = Fastify({
-  logger: false,
+  logger: { level: process.env.LOG_LEVEL ?? 'info' },
+});
+
+const startedAt = Date.now();
+let requestCount = 0;
+let requestDurationTotal = 0;
+const eventClients = new Set<import('node:http').ServerResponse>();
+const eventHistory: Array<{ id: string; type: string; message: string; at: string }> = [];
+
+function publishEvent(type: string, message: string) {
+  const event = { id: randomUUID(), type, message, at: new Date().toISOString() };
+  eventHistory.unshift(event);
+  eventHistory.splice(30);
+  const payload = `event: ${type}\ndata: ${JSON.stringify(event)}\n\n`;
+  eventClients.forEach((client) => client.write(payload));
+  return event;
+}
+
+app.addHook('onResponse', async (request, reply) => {
+  const durationMs = Math.round(reply.elapsedTime);
+  requestCount += 1;
+  requestDurationTotal += durationMs;
+  request.log.info({ requestId: request.id, method: request.method, route: request.routeOptions.url, statusCode: reply.statusCode, durationMs }, 'request completed');
 });
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -188,6 +211,20 @@ async function updateIncidentRecord(id: string, payload: Partial<Incident>) {
 
 app.get('/health/live', async () => ({ status: 'ok' }));
 
+app.get('/api/whoami', async (request) => {
+  const requestedRole = request.headers['x-opslab-role'];
+  const role = requestedRole === 'viewer' || requestedRole === 'admin' ? requestedRole : 'operator';
+  return { role, capabilities: role === 'viewer' ? ['read:status', 'read:incidents'] : ['read:status', 'read:incidents', 'write:incidents', 'run:labs'] };
+});
+
+app.get('/api/events', async (_request, reply) => {
+  reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+  eventHistory.slice().reverse().forEach((event) => reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`));
+  eventClients.add(reply.raw);
+  reply.raw.on('close', () => eventClients.delete(reply.raw));
+  return reply.hijack();
+});
+
 app.get('/', async (_request, reply) => {
   return reply.type('text/html; charset=utf-8').send(await frontendAssets.html);
 });
@@ -238,6 +275,9 @@ app.get('/health/ready', async () => {
 app.get('/api/services', async () => ({ services: await loadServices() }));
 
 app.post('/api/services', async (request, reply) => {
+  if (request.headers['x-opslab-role'] === 'viewer') {
+    return reply.code(403).send({ error: 'Viewer role cannot change services' });
+  }
   const { name, owner, status } = request.body as Partial<ServiceRecord>;
 
   if (!name || !owner || !status) {
@@ -251,12 +291,16 @@ app.post('/api/services', async (request, reply) => {
     status,
   };
 
+  publishEvent('service', `Service ${service.name} was created`);
   return reply.code(201).send(await saveService(service));
 });
 
 app.get('/api/incidents', async () => ({ incidents: await loadIncidents() }));
 
 app.post('/api/incidents', async (request, reply) => {
+  if (request.headers['x-opslab-role'] === 'viewer') {
+    return reply.code(403).send({ error: 'Viewer role cannot create incidents' });
+  }
   const { title, severity, status } = request.body as Partial<Incident>;
 
   if (!title || !severity || !status) {
@@ -271,10 +315,14 @@ app.post('/api/incidents', async (request, reply) => {
     createdAt: new Date().toISOString(),
   };
 
+  publishEvent('incident', `Incident ${incident.id} opened: ${incident.title}`);
   return reply.code(201).send(await saveIncident(incident));
 });
 
 app.patch('/api/incidents/:id', async (request, reply) => {
+  if (request.headers['x-opslab-role'] === 'viewer') {
+    return reply.code(403).send({ error: 'Viewer role cannot update incidents' });
+  }
   const { id } = request.params as { id: string };
   const payload = request.body as Partial<Incident>;
   const incident = await updateIncidentRecord(id, payload);
@@ -283,20 +331,38 @@ app.patch('/api/incidents/:id', async (request, reply) => {
     return reply.code(404).send({ error: 'Incident not found' });
   }
 
+  publishEvent('incident', `Incident ${id} updated to ${incident.status}`);
   return incident;
 });
 
-app.get('/metrics', async () => {
+app.get('/api/ops/summary', async () => {
   const loadedServices = await loadServices();
   const loadedIncidents = await loadIncidents();
 
   return {
-    http_requests_total: 1,
-    http_request_duration_ms: 15,
+    http_requests_total: requestCount,
+    http_request_duration_ms: requestCount ? Math.round(requestDurationTotal / requestCount) : 0,
     active_incidents: loadedIncidents.length,
     services_total: loadedServices.length,
+    uptime_seconds: Math.round((Date.now() - startedAt) / 1000),
     status: 'ok',
   };
+});
+
+app.get('/metrics', async (_request, reply) => {
+  const loadedServices = await loadServices();
+  const loadedIncidents = await loadIncidents();
+  const averageDuration = requestCount ? requestDurationTotal / requestCount : 0;
+  return reply.type('text/plain; version=0.0.4').send([
+    '# HELP opslab_http_requests_total Total HTTP requests served by OpsLab',
+    '# TYPE opslab_http_requests_total counter', `opslab_http_requests_total ${requestCount}`,
+    '# HELP opslab_http_request_duration_ms_mean Mean request duration in milliseconds',
+    '# TYPE opslab_http_request_duration_ms_mean gauge', `opslab_http_request_duration_ms_mean ${averageDuration.toFixed(2)}`,
+    '# HELP opslab_active_incidents Current number of incidents',
+    '# TYPE opslab_active_incidents gauge', `opslab_active_incidents ${loadedIncidents.length}`,
+    '# HELP opslab_services_total Current number of services',
+    '# TYPE opslab_services_total gauge', `opslab_services_total ${loadedServices.length}`,
+  ].join('\n') + '\n');
 });
 
 const port = Number(process.env.PORT ?? 3000);
