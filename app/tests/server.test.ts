@@ -211,4 +211,29 @@ describe('OpsLab API', () => {
     expect(viewer.statusCode).toBe(403);
     await app.inject({ method: 'DELETE', url: '/api/chaos' });
   });
+
+  it('fails data routes while an error fault is injected, and reports it as an alert', async () => {
+    await app.inject({ method: 'POST', url: '/api/chaos', payload: { errorRate: 1, durationSeconds: 30 } });
+    const failed = await app.inject({ method: 'GET', url: '/api/services' });
+    expect(failed.statusCode).toBe(500);
+    expect((await app.inject({ method: 'GET', url: '/health/live' })).statusCode).toBe(200);
+
+    // Enough failures to dominate the rolling window, whatever the earlier tests sent.
+    await Promise.all(Array.from({ length: 60 }, () => app.inject({ method: 'GET', url: '/api/services' })));
+    const summary = (await app.inject({ method: 'GET', url: '/api/ops/summary' })).json();
+    expect(summary.alerts.find((alert: { name: string }) => alert.name === 'HighErrorRate')).toMatchObject({ firing: true });
+    expect(summary.slo.bad).toBeGreaterThan(0);
+
+    await app.inject({ method: 'DELETE', url: '/api/chaos' });
+    expect((await app.inject({ method: 'GET', url: '/api/services' })).statusCode).toBe(200);
+  });
+
+  it('names the instance that served each response', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/services' });
+    const summary = (await app.inject({ method: 'GET', url: '/api/ops/summary' })).json();
+
+    expect(response.headers['x-served-by']).toBeTruthy();
+    expect(summary.instance).toBe(response.headers['x-served-by']);
+    expect(summary.slo).toMatchObject({ target: expect.any(Number), budget_remaining: expect.any(Number) });
+  });
 });

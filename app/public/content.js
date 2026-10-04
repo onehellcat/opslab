@@ -55,7 +55,8 @@ const stages = {
 };
 const views = {
   compose: {
-    html: '<div class="flow"><div class="node active" data-node="browser"><span class="node-icon">◎</span><b>Your browser</b><small>localhost:3000</small></div><span class="arrow">→</span><div class="stack"><div class="node" data-node="api"><span class="node-icon">⬡</span><b>Fastify API</b><small>api container :3000</small></div><div class="node" data-node="db"><span class="node-icon">▱</span><b>PostgreSQL 16</b><small>postgres :5432</small></div></div></div>',
+    html: 
+      '<div class="flow"><div class="node active" data-node="browser"><span class="node-icon">◎</span><b>Your browser</b><small>localhost:3000</small></div><span class="wire"><small>HTTP :3000</small><i></i></span><div class="node" data-node="api"><span class="node-icon">⬡</span><b>Fastify API</b><small>api container :3000</small></div><span class="wire"><small>TCP :5432</small><i></i></span><div class="node" data-node="db"><span class="node-icon">▱</span><b>PostgreSQL 16</b><small>postgres :5432</small></div></div>',
     first: 'browser',
     nodes: {
       browser: [
@@ -97,7 +98,8 @@ const views = {
     },
   },
   kubernetes: {
-    html: '<div class="flow"><div class="node" data-node="service"><span class="node-icon">⇄</span><b>Service</b><small>ClusterIP :80</small></div><span class="arrow">→</span><div class="cluster"><div class="node active" data-node="pod"><span class="node-icon">⬡</span><b>Pod 01</b><small>ready · :3000</small></div><div class="node" data-node="pod"><span class="node-icon">⬡</span><b>Pod 02</b><small>ready · :3000</small></div></div></div>',
+    html: 
+      '<div class="flow"><div class="node" data-node="service"><span class="node-icon">⇄</span><b>Service</b><small>ClusterIP :80</small></div><span class="wire"><small>80 → 3000</small><i></i></span><div class="cluster"><div class="node active" data-node="pod"><span class="node-icon">⬡</span><b>Pod 01</b><small>ready · :3000</small></div><div class="node" data-node="pod"><span class="node-icon">⬡</span><b>Pod 02</b><small>ready · :3000</small></div></div><span class="wire"><small>postgres:5432</small><i></i></span><div class="node" data-node="database"><span class="node-icon">▱</span><b>PostgreSQL</b><small>StatefulSet · 1Gi PVC</small></div></div>',
     first: 'pod',
     nodes: {
       service: [
@@ -118,16 +120,29 @@ const views = {
         [
           ['Replicas', '2 desired'],
           ['Ready probe', '5s → every 10s'],
-          ['Live probe', '10s → every 15s'],
+          ['Resources', '50m CPU · 96Mi'],
         ],
         'kubernetes/deployment.yaml',
         'Separating traffic eligibility from restart policy prevents a warming or dependency-blocked app from receiving requests without creating an unnecessary restart loop.',
         'Run kubectl describe pod -n opslab and inspect Conditions and Events.',
       ],
+      database: [
+        'Stateful database',
+        'PostgreSQL runs as a StatefulSet with one replica. Its pod keeps a stable name, postgres-0, and a PersistentVolumeClaim that survives restarts. Both API pods reach it through the postgres Service and read the password from a Secret.',
+        [
+          ['Kind', 'StatefulSet'],
+          ['Storage', '1Gi PVC'],
+          ['Credentials', 'Secret opslab-db'],
+        ],
+        'kubernetes/postgres.yaml',
+        'Without a shared database each API replica would keep its own in-memory data and the two pods would give different answers. Shared state belongs in one durable place, not inside replaceable pods.',
+        'Run kubectl get statefulset,pvc -n opslab, then delete postgres-0 and watch it return with its data.',
+      ],
     },
   },
   terraform: {
-    html: '<div class="flow"><div class="node active" data-node="config"><span class="node-icon">⌁</span><b>main.tf</b><small>desired state</small></div><span class="arrow">→</span><div class="node" data-node="provider"><span class="node-icon">↻</span><b>K8s provider</b><small>reconcile</small></div><span class="arrow">→</span><div class="node" data-node="state"><span class="node-icon">▦</span><b>4 resources</b><small>real cluster</small></div></div>',
+    html: 
+      '<div class="flow"><div class="node active" data-node="config"><span class="node-icon">⌁</span><b>main.tf</b><small>desired state</small></div><span class="wire"><small>plan</small><i></i></span><div class="node" data-node="provider"><span class="node-icon">↻</span><b>K8s provider</b><small>reconcile</small></div><span class="wire"><small>apply</small><i></i></span><div class="node" data-node="state"><span class="node-icon">▦</span><b>8 resources</b><small>real cluster</small></div></div>',
     first: 'config',
     nodes: {
       config: [
@@ -135,7 +150,7 @@ const views = {
         'HCL describes the end state rather than a list of shell commands. References between resources form a dependency graph, so Terraform knows the namespace and ConfigMap must exist before the Deployment.',
         [
           ['Language', 'HCL'],
-          ['Resources', '4'],
+          ['Resources', '8'],
           ['Terraform', '≥ 1.6.0'],
         ],
         'terraform/main.tf',
@@ -160,7 +175,7 @@ const views = {
         [
           ['Namespace', 'opslab'],
           ['Replicas', '2'],
-          ['Service', 'ClusterIP'],
+          ['Database', 'StatefulSet'],
         ],
         'terraform/main.tf',
         'Without that mapping, Terraform could not reliably decide whether to create, update, replace, or leave an existing object alone. State may contain sensitive data and should be protected.',
@@ -247,29 +262,38 @@ const notes = {
     'This route returns operational incidents. Severity describes customer or system impact; status describes workflow state. Keeping those concepts separate allows a critical incident to move from open to investigating to resolved without rewriting its historical impact.',
   '/api/ops/summary':
     'This is the JSON view of the same signals Prometheus scrapes from /metrics. It adds a rolling ten-second window with request rate and latency percentiles, which is what the live charts in the operations console draw. Machines read the exposition format; people and UIs usually want JSON.',
+  '/api/whoami':
+    'Authorization answers what a caller may do. This endpoint reflects the x-opslab-role header as a role and a list of capabilities. It is a teaching device, not real authentication: anyone can send any header, which is exactly why production systems verify identity with signed tokens.',
+  '/api/chaos':
+    'GET shows the fault currently injected by the incident lab. POST injects latency, errors, or a failing readiness check into this process only, and every fault expires on its own. It is on for local development and has to be switched on explicitly for a production build.',
   '/metrics':
     'Metrics expose numeric observations that a monitoring system can scrape repeatedly. Counters describe accumulated work, duration values reveal latency, and gauges such as active_incidents describe current state. In production these samples become charts and alert conditions.',
 };
 
-// Lines streamed into the pipeline terminal. `fail` replaces `lines` when "Break the build" is on.
+// Lines streamed into the pipeline terminal, and the workflow YAML that produces them.
+// `fail` replaces `lines` when "Break the build" is on.
 const stageLogs = {
   checkout: {
     lines: ['→ Fetching refs/heads/main', '→ Checking out 8f31ca (depth 1)', '✓ Working tree ready'],
+    yaml: ['runs-on: ubuntu-latest', 'steps:', '  - name: Checkout code', '    uses: actions/checkout@v4'],
   },
   install: {
     lines: ['→ Cache restored from package-lock.json hash', '→ Installing exact versions from the lockfile', '✓ Lockfile reproduced exactly'],
+    yaml: ['- uses: actions/setup-node@v4', '  with:', '    node-version: 22', '    cache: npm', '- name: Install dependencies', '  run: npm ci'],
   },
   verify: {
-    lines: ['→ tsc --noEmit · 0 type errors', '→ vitest · creating Fastify in memory', '→ health, incidents, metrics, chaos routes pass', '✓ Quality gate passed'],
+    lines: ['→ tsc --noEmit · 0 type errors', '→ vitest · API tests against PostgreSQL 16', '→ playwright · labs driven in a real browser', '✓ Quality gate passed'],
     fail: [
       '→ tsc --noEmit · 0 type errors',
-      '→ vitest · creating Fastify in memory',
+      '→ vitest · API tests against PostgreSQL 16',
       '✗ returns ready status for the service',
       '   expected 503 to be 200',
       '✗ Quality gate failed · exit code 1',
     ],
+    yaml: ['services:', '  postgres:', '    image: postgres:16-alpine', 'steps:', '  - name: Type check', '    run: npm run lint', '  - name: Run tests', '    run: npm test'],
   },
   image: {
-    lines: ['→ [builder] npm ci && npm run build', '→ [runner] copying dist/ and public/', '→ exporting layers', '✓ Immutable artifact packaged'],
+    lines: ['→ [builder] npm ci && npm run build', '→ [runner] copying dist/ and public/', '→ trivy · scanning image for known vulnerabilities', '✓ Immutable artifact packaged'],
+    yaml: ['- name: Build image', '  run: docker build -t opslab-api:ci app', '- name: Scan image', '  uses: aquasecurity/trivy-action@v0.33.1', '- name: Push image (main only)', '  run: docker push ghcr.io/…/opslab-api'],
   },
 };

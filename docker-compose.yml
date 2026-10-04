@@ -17,6 +17,11 @@ services:
       DATABASE_NAME: opslab
       DATABASE_USER: opslab
       DATABASE_PASSWORD: development
+      # The image runs with NODE_ENV=production, where fault injection is off unless enabled here.
+      OPSLAB_CHAOS: "${OPSLAB_CHAOS:-on}"
+      # Traces are exported when the observe profile (Jaeger) is running; otherwise they are dropped.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OPSLAB_TRACE_UI: http://localhost:16686
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,6 +62,15 @@ services:
       - "9090:9090"
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    profiles: [observe]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
 
   grafana:
     image: grafana/grafana:11.2.0

@@ -14,3 +14,7 @@ coverage/
 
 # Local Claude Code settings
 .claude/
+
+# Playwright output
+app/test-results/
+app/playwright-report/

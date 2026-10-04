@@ -25,9 +25,9 @@
       <div class="eyebrow"><span>01</span> Your local DevOps field guide</div>
       <h1>See how your code<br><em>becomes a service.</em></h1>
       <p class="hero-copy">Follow one change from commit to container to Kubernetes. Every concept below maps to a real file running in this repository.</p>
-      <div class="hero-actions"><a class="button primary" href="#pipeline">Explore the pipeline <span>↓</span></a><button class="button ghost" id="quick-health"><span class="pulse-icon"></span> Ping the API</button></div>
+      <div class="hero-actions"><a class="button primary" href="#pipeline">Explore the pipeline <span>↓</span></a><button class="button ghost" id="quick-health"><span class="pulse-icon"></span> Ping the API</button><button class="button ghost" id="start-tour" type="button">Take the tour <span>→</span></button></div>
       <div class="hero-status" id="health-toast" aria-live="polite"></div>
-      <div class="orbit" id="orbit" aria-hidden="true"><div class="orbit-ring ring-one"><span></span></div><div class="orbit-ring ring-two"><span></span></div><div class="core"><b>OPS</b><small>LAB</small></div><span class="orbit-label label-code">CODE</span><span class="orbit-label label-build">BUILD</span><span class="orbit-label label-ship">SHIP</span></div>
+      <div class="orbit" id="orbit" aria-hidden="true"><div class="orbit-ring ring-one"><span></span></div><div class="orbit-ring ring-two"><span></span></div><div class="core"><span><b>OPS</b><small>LAB</small></span></div><span class="orbit-label label-code">CODE</span><span class="orbit-label label-build">BUILD</span><span class="orbit-label label-ship">SHIP</span></div>
     </section>
 
     <section class="stat-strip reveal" aria-label="Live system summary"><div><strong id="stat-requests">—</strong><span>Requests served</span></div><div><strong id="stat-services">—</strong><span>Services</span></div><div><strong id="stat-incidents">—</strong><span>Open incidents</span></div><div><strong id="stat-uptime">—</strong><span>Uptime</span></div></section>
@@ -64,7 +64,7 @@
     <section class="section request-path-section" id="request-path">
       <div class="section-heading reveal"><div><div class="eyebrow"><span>04</span> Request lifecycle</div><h2>Follow one packet</h2></div><p>Trace a request from the browser to PostgreSQL. Each hop explains the protocol boundary, the work performed there, and how to observe it yourself.</p></div>
       <div class="trace-shell reveal">
-        <div class="trace-toolbar"><div><span class="trace-id">TRACE 7F3A</span><b>GET /api/services</b></div><button id="run-trace" class="run-button"><span>▶</span> Trace request</button></div>
+        <div class="trace-toolbar"><div><span class="trace-id" id="trace-id">TRACE —</span><b>GET /api/services</b><a class="trace-link" id="trace-link" target="_blank" rel="noopener" hidden>Open in Jaeger ↗</a></div><button id="run-trace" class="run-button"><span>▶</span> Trace request</button></div>
         <div class="trace-map" id="trace-map">
           <div class="trace-line"><i id="trace-progress"></i></div>
           <button class="trace-hop active" data-hop="client"><span class="hop-number">01</span><span class="hop-icon">◎</span><b>Browser</b><small>HTTP/1.1</small></button>
@@ -84,10 +84,12 @@
         <div><span>FOUNDATION · 01–03</span><b>Package, operate, declare</b><p>Begin with containers, health signals, and infrastructure state. These explain what is deployed and how the platform maintains it.</p></div>
         <i aria-hidden="true">→</i>
         <div><span>OPERATIONS · 04–06</span><b>Connect, change, observe</b><p>Then follow traffic between services, release a new version safely, and build the signals needed to understand production behavior.</p></div>
+        <i aria-hidden="true">→</i>
+        <div><span>PLATFORM · 07–09</span><b>Configure, scale, reconcile</b><p>Finish with configuration and secrets, automatic scaling, and Git as the source of truth for what runs.</p></div>
       </div>
       <div class="lesson-grid reveal" id="lesson-grid">
         <article class="lesson-card" data-lesson="container">
-          <div class="lesson-top"><span>01 / CONTAINER</span><button class="lesson-complete" aria-label="Mark container lesson complete" title="Mark complete">○</button></div>
+          <div class="lesson-top"><span>01 / CONTAINER</span><button class="lesson-complete" type="button" aria-pressed="false"><i aria-hidden="true">○</i><span>Mark done</span></button></div>
           <div class="lesson-glyph">◇</div><h3>Image vs. container</h3>
           <p><strong>An image is a blueprint:</strong> immutable filesystem layers and startup metadata. A container is one isolated, running instance of that blueprint.</p>
           <button class="lesson-expand" aria-expanded="false" aria-controls="container-details"><span>Explore concept</span><i>+</i></button>
@@ -104,7 +106,7 @@
           <footer><code>app/Dockerfile</code><span>5 min</span></footer>
         </article>
         <article class="lesson-card" data-lesson="health">
-          <div class="lesson-top"><span>02 / RELIABILITY</span><button class="lesson-complete" aria-label="Mark health lesson complete" title="Mark complete">○</button></div>
+          <div class="lesson-top"><span>02 / RELIABILITY</span><button class="lesson-complete" type="button" aria-pressed="false"><i aria-hidden="true">○</i><span>Mark done</span></button></div>
           <div class="lesson-glyph">♡</div><h3>Live is not ready</h3>
           <p><strong>Liveness asks “restart me?”</strong> Readiness asks “send me traffic?” The two signals deliberately control different Kubernetes behaviors.</p>
           <button class="lesson-expand" aria-expanded="false" aria-controls="health-details"><span>Explore concept</span><i>+</i></button>
@@ -120,8 +122,8 @@
           <footer><code>kubernetes/deployment.yaml</code><span>5 min</span></footer>
         </article>
         <article class="lesson-card" data-lesson="iac">
-          <div class="lesson-top"><span>03 / AUTOMATION</span><button class="lesson-complete" aria-label="Mark IaC lesson complete" title="Mark complete">○</button></div>
-          <div class="lesson-glyph">⌁</div><h3>Infrastructure as code</h3>
+          <div class="lesson-top"><span>03 / AUTOMATION</span><button class="lesson-complete" type="button" aria-pressed="false"><i aria-hidden="true">○</i><span>Mark done</span></button></div>
+          <div class="lesson-glyph">▦</div><h3>Infrastructure as code</h3>
           <p><strong>Configuration describes the desired result.</strong> Terraform compares that intent with saved state and real infrastructure before proposing changes.</p>
           <button class="lesson-expand" aria-expanded="false" aria-controls="iac-details"><span>Explore concept</span><i>+</i></button>
           <div class="lesson-details" id="iac-details" hidden>
@@ -137,7 +139,7 @@
           <footer><code>terraform/main.tf</code><span>6 min</span></footer>
         </article>
         <article class="lesson-card" data-lesson="networking">
-          <div class="lesson-top"><span>04 / NETWORKING</span><button class="lesson-complete" aria-label="Mark networking lesson complete" title="Mark complete">○</button></div>
+          <div class="lesson-top"><span>04 / NETWORKING</span><button class="lesson-complete" type="button" aria-pressed="false"><i aria-hidden="true">○</i><span>Mark done</span></button></div>
           <div class="lesson-glyph">⇄</div><h3>Names, ports, and services</h3>
           <p><strong>A service name is a stable promise.</strong> Containers and pods are replaceable, so callers need DNS and virtual service endpoints rather than hard-coded process addresses.</p>
           <button class="lesson-expand" aria-expanded="false" aria-controls="networking-details"><span>Explore concept</span><i>+</i></button>
@@ -153,7 +155,7 @@
           <footer><code>kubernetes/service.yaml</code><span>7 min</span></footer>
         </article>
         <article class="lesson-card" data-lesson="rollouts">
-          <div class="lesson-top"><span>05 / DELIVERY</span><button class="lesson-complete" aria-label="Mark delivery lesson complete" title="Mark complete">○</button></div>
+          <div class="lesson-top"><span>05 / DELIVERY</span><button class="lesson-complete" type="button" aria-pressed="false"><i aria-hidden="true">○</i><span>Mark done</span></button></div>
           <div class="lesson-glyph">↻</div><h3>Safe rollouts and rollback</h3>
           <p><strong>A deployment changes capacity gradually.</strong> Kubernetes creates new pods, waits for readiness, and removes old pods while preserving the desired replica count.</p>
           <button class="lesson-expand" aria-expanded="false" aria-controls="rollouts-details"><span>Explore concept</span><i>+</i></button>
@@ -169,8 +171,8 @@
           <footer><code>kubernetes/deployment.yaml</code><span>8 min</span></footer>
         </article>
         <article class="lesson-card" data-lesson="observability">
-          <div class="lesson-top"><span>06 / OBSERVABILITY</span><button class="lesson-complete" aria-label="Mark observability lesson complete" title="Mark complete">○</button></div>
-          <div class="lesson-glyph">⌁</div><h3>Logs, metrics, and traces</h3>
+          <div class="lesson-top"><span>06 / OBSERVABILITY</span><button class="lesson-complete" type="button" aria-pressed="false"><i aria-hidden="true">○</i><span>Mark done</span></button></div>
+          <div class="lesson-glyph">◔</div><h3>Logs, metrics, and traces</h3>
           <p><strong>Observability explains unknown failures.</strong> Logs preserve events, metrics summarize behavior over time, and traces connect work across service boundaries.</p>
           <button class="lesson-expand" aria-expanded="false" aria-controls="observability-details"><span>Explore concept</span><i>+</i></button>
           <div class="lesson-details" id="observability-details" hidden>
@@ -184,31 +186,80 @@
           </div>
           <footer><code>GET /metrics</code><span>8 min</span></footer>
         </article>
+        <article class="lesson-card" data-lesson="config">
+          <div class="lesson-top"><span>07 / CONFIGURATION</span><button class="lesson-complete" type="button" aria-pressed="false"><i aria-hidden="true">○</i><span>Mark done</span></button></div>
+          <div class="lesson-glyph">⚿</div><h3>Config and secrets</h3>
+          <p><strong>The image stays the same; configuration changes.</strong> ConfigMaps hold ordinary settings and Secrets hold credentials, and both reach the container as environment variables or files.</p>
+          <button class="lesson-expand" aria-expanded="false" aria-controls="config-details"><span>Explore concept</span><i>+</i></button>
+          <div class="lesson-details" id="config-details" hidden>
+            <div><span>MENTAL MODEL</span><p><b>One image, many environments.</b> Anything that differs between your laptop, staging, and production is injected at start time. Rebuilding an image to change a hostname means the thing you tested is not the thing you ship.</p></div>
+            <div><span>IN THIS PROJECT</span><p>The ConfigMap <code>opslab-config</code> supplies <code>PORT</code>, <code>NODE_ENV</code>, and the database host. The Secret <code>opslab-db</code> supplies the database password to both the API and PostgreSQL.</p></div>
+            <div><span>SECRETS ARE NOT ENCRYPTED</span><p>A Secret value in YAML is base64, which is an encoding, not encryption. Anyone who can read the object can decode it. Real protection comes from access control, encryption at rest, and keeping secret manifests out of Git.</p></div>
+            <div><span>CHANGES NEED A RESTART</span><p>Environment variables are read once when the process starts. Editing a ConfigMap does not change running pods; a rollout restart creates new pods that read the new values.</p></div>
+            <div class="lesson-toy" id="secret-toy"><span>SECRET INSPECTOR</span><p>Type a password and see exactly what ends up in the Secret manifest.</p><div class="toy-controls"><label for="secret-input">password</label><input type="text" id="secret-input" value="development" maxlength="40" spellcheck="false" autocomplete="off"><button type="button" id="secret-decode">Decode it back</button></div><pre class="plan-output" id="secret-output" aria-live="polite"></pre><p class="toy-result" id="secret-result" aria-live="polite"></p></div>
+            <div class="lesson-experiment"><span>TRY IT</span><p>Read the Secret from the cluster and decode one value yourself.</p><button data-lesson-copy="kubectl get secret opslab-db -n opslab -o yaml"><code>kubectl get secret opslab-db -n opslab -o yaml</code><i>Copy</i></button></div>
+          </div>
+          <footer><code>kubernetes/postgres.yaml</code><span>6 min</span></footer>
+        </article>
+        <article class="lesson-card" data-lesson="autoscaling">
+          <div class="lesson-top"><span>08 / SCALING</span><button class="lesson-complete" type="button" aria-pressed="false"><i aria-hidden="true">○</i><span>Mark done</span></button></div>
+          <div class="lesson-glyph">⟰</div><h3>Scaling on demand</h3>
+          <p><strong>Replicas follow load.</strong> A HorizontalPodAutoscaler compares measured usage with a target and changes the replica count so each pod stays near that target.</p>
+          <button class="lesson-expand" aria-expanded="false" aria-controls="autoscaling-details"><span>Explore concept</span><i>+</i></button>
+          <div class="lesson-details" id="autoscaling-details" hidden>
+            <div><span>MENTAL MODEL</span><p><b>desired = ceil(current × usage ÷ target).</b> If two pods run at 90% CPU against a 60% target, the autoscaler asks for three. The same formula scales back down when load falls.</p></div>
+            <div><span>REQUESTS MAKE IT WORK</span><p>Utilization is measured against each container’s CPU request. A pod with no request has no percentage to compute, so autoscaling silently does nothing. This project sets requests in the Deployment.</p></div>
+            <div><span>LIMITS OF SCALING OUT</span><p>More API pods only help if the bottleneck is the API. If the database is the slow part, extra replicas add connections and make it worse. Find the constrained resource first.</p></div>
+            <div><span>SCALE-DOWN IS SLOWER</span><p>Autoscalers add pods quickly and remove them cautiously, waiting several minutes by default. That stops the replica count from flapping when load is bursty.</p></div>
+            <div class="lesson-toy" id="hpa-toy"><span>AUTOSCALER SIMULATOR</span><p>Each pod handles 50 requests per second at full CPU. The target is 60% CPU, with 2 to 8 replicas. Drag the load and watch the controller react.</p><div class="toy-controls"><label for="hpa-load">load = <b id="hpa-load-value">40</b> req/s</label><input type="range" id="hpa-load" min="0" max="400" step="10" value="40"></div><div class="hpa-pods" id="hpa-pods" aria-hidden="true"></div><p class="toy-result" id="hpa-result" aria-live="polite"></p></div>
+            <div class="lesson-experiment"><span>TRY IT</span><p>Watch current and target utilization once an autoscaler exists.</p><button data-lesson-copy="kubectl get hpa -n opslab -w"><code>kubectl get hpa -n opslab -w</code><i>Copy</i></button></div>
+          </div>
+          <footer><code>kubernetes/deployment.yaml</code><span>7 min</span></footer>
+        </article>
+        <article class="lesson-card" data-lesson="gitops">
+          <div class="lesson-top"><span>09 / GITOPS</span><button class="lesson-complete" type="button" aria-pressed="false"><i aria-hidden="true">○</i><span>Mark done</span></button></div>
+          <div class="lesson-glyph">⎇</div><h3>Git as the source of truth</h3>
+          <p><strong>The cluster follows the repository.</strong> A controller keeps comparing what Git declares with what is running, and corrects any difference without anyone running kubectl.</p>
+          <button class="lesson-expand" aria-expanded="false" aria-controls="gitops-details"><span>Explore concept</span><i>+</i></button>
+          <div class="lesson-details" id="gitops-details" hidden>
+            <div><span>MENTAL MODEL</span><p><b>Desired state in Git, a loop that enforces it.</b> You change the system by merging a commit. The controller notices the new commit, applies it, and reports whether the cluster is in sync.</p></div>
+            <div><span>DRIFT GETS UNDONE</span><p>A manual <code>kubectl scale</code> is drift. The controller sees the cluster no longer matches Git and puts it back. Emergency changes therefore have to land in Git to stick.</p></div>
+            <div><span>WHY TEAMS LIKE IT</span><p>Every change has an author, a review, and a diff. Rolling back is reverting a commit. A new cluster can be rebuilt from the repository alone.</p></div>
+            <div><span>IN THIS PROJECT</span><p>The manifests in <code>kubernetes/</code> are already the desired state. Pointing Argo CD or Flux at that folder would turn <code>kubectl apply</code> into a pull request.</p></div>
+            <div class="lesson-toy" id="gitops-toy"><span>RECONCILE LOOP</span><p>Change the cluster by hand, or change Git, and watch which one wins.</p><div class="gitops-stage"><div><small>GIT · desired</small><b id="gitops-desired">replicas: 2</b></div><i id="gitops-status" class="synced">Synced</i><div><small>CLUSTER · actual</small><div class="gitops-pods" id="gitops-pods"></div></div></div><div class="toy-controls"><button type="button" id="gitops-drift">kubectl scale --replicas=5</button><button type="button" id="gitops-commit">Commit replicas: 4</button><button type="button" id="gitops-reset">Reset</button></div><ol class="gitops-log" id="gitops-log" aria-live="polite"></ol></div>
+            <div class="lesson-experiment"><span>TRY IT</span><p>See how the running cluster differs from the manifests in this repository.</p><button data-lesson-copy="kubectl diff -f kubernetes/"><code>kubectl diff -f kubernetes/</code><i>Copy</i></button></div>
+          </div>
+          <footer><code>kubernetes/</code><span>7 min</span></footer>
+        </article>
       </div>
-      <div class="progress-card reveal"><div><span>LEARNING PROGRESS</span><b id="progress-label">0 of 6 complete</b></div><div class="progress-bar"><i id="lesson-progress"></i></div><small id="progress-percent">0%</small></div>
+      <div class="progress-card reveal"><div><span>LEARNING PROGRESS</span><b id="progress-label">0 of 9 complete</b></div><div class="progress-bar"><i id="lesson-progress"></i></div><small id="progress-percent">0%</small></div>
     </section>
 
     <section class="section playground-section" id="playground">
       <div class="section-heading reveal"><div><div class="eyebrow"><span>06</span> API playground</div><h2>Touch the running system</h2></div><p>Send real requests to Fastify, then relate the status code, timing, and JSON body to the selected endpoint’s operational purpose.</p></div>
       <div class="playground reveal">
         <div class="request-panel">
-          <div class="request-line"><select id="method" aria-label="HTTP method"><option>GET</option><option>POST</option></select><select id="endpoint" aria-label="API endpoint"><option value="/health/live">/health/live</option><option value="/health/ready">/health/ready</option><option value="/api/services">/api/services</option><option value="/api/incidents">/api/incidents</option><option value="/api/ops/summary">/api/ops/summary</option><option value="/metrics">/metrics</option></select><button id="send-request">Send <span>→</span></button></div>
+          <div class="request-line"><select id="method" aria-label="HTTP method"><option>GET</option><option>POST</option></select><select id="endpoint" aria-label="API endpoint"><option value="/health/live">/health/live</option><option value="/health/ready">/health/ready</option><option value="/api/services">/api/services</option><option value="/api/incidents">/api/incidents</option><option value="/api/ops/summary">/api/ops/summary</option><option value="/api/whoami">/api/whoami</option><option value="/api/chaos">/api/chaos</option><option value="/metrics">/metrics</option></select><button id="send-request">Send <span>→</span></button></div>
           <div class="request-note"><span class="live-dot"></span> Requests target <code>localhost:3000</code></div>
           <label class="role-select" for="operator-role">OPERATOR ROLE <select id="operator-role"><option value="operator">Operator</option><option value="viewer">Viewer (read-only)</option><option value="admin">Admin</option></select></label>
           <label class="request-body" for="request-json">REQUEST BODY <textarea id="request-json" spellcheck="false" aria-label="JSON request body">{}</textarea></label>
           <button class="curl-copy" id="copy-curl">Copy as curl</button>
           <div class="endpoint-guide"><h3>What to notice</h3><p id="endpoint-note">A liveness probe only proves the Node.js process can answer. Kubernetes restarts the container if this repeatedly fails.</p></div>
         </div>
-        <div class="response-panel"><div class="response-head"><div><span></span> RESPONSE</div><div><b id="response-status">READY</b><span id="response-time">— ms</span></div></div><pre id="response-body"><span class="json-muted">// Choose an endpoint and send a request.</span></pre></div>
+        <div class="response-panel"><div class="response-head"><div><span></span> RESPONSE</div><div><span id="response-instance" title="The instance that answered (the pod name in Kubernetes)"></span><b id="response-status">READY</b><span id="response-time">— ms</span></div></div><pre id="response-body"><span class="json-muted">// Choose an endpoint and send a request.</span></pre></div>
       </div>
     </section>
 
     <section class="section operations-section" id="operations">
       <div class="section-heading reveal"><div><div class="eyebrow"><span>07</span> Operations console</div><h2>Observe, disturb, recover.</h2></div><p>Watch live signals, diagnose an incident against the clock, and steer a rolling update. The labs are simulations unless you opt in to a real, self-expiring fault in this API.</p></div>
       <div class="ops-grid reveal">
-        <article class="ops-card status-card"><div class="ops-card-head"><span>LIVE SYSTEM SNAPSHOT</span><button id="refresh-ops" type="button">Refresh</button></div><div class="ops-stats"><div><small>API</small><b id="ops-api">Checking…</b></div><div><small>READINESS</small><b id="ops-db">Checking…</b></div><div><small>OPEN INCIDENTS</small><b id="ops-incidents">—</b></div><div><small>SERVICES</small><b id="ops-services">—</b></div></div><div class="spark-row"><div><span>P95 LATENCY · 10 S</span><b id="spark-latency-value">— ms</b><svg id="spark-latency" viewBox="0 0 120 34" preserveAspectRatio="none" role="img" aria-label="Recent p95 latency"></svg></div><div><span>REQUESTS / S</span><b id="spark-rate-value">—</b><svg id="spark-rate" viewBox="0 0 120 34" preserveAspectRatio="none" role="img" aria-label="Recent request rate"></svg></div></div><button id="send-burst" type="button">Send 50 requests</button><p class="ops-hint">Charts poll <code>/api/ops/summary</code> every two seconds while this section is on screen. Send a burst to make them move.</p></article>
-        <article class="ops-card incident-card"><div class="ops-card-head"><span>INCIDENT LAB</span><span id="scenario-state">NORMAL</span></div><h3 id="scenario-title">Diagnose against the clock</h3><p id="scenario-copy">Pick a failure, then choose each next step. A wrong turn costs two minutes. Aim for the lowest time to recovery.</p><div class="scenario-actions" id="scenario-picker"><button type="button" data-scenario="database">Database latency</button><button type="button" data-scenario="readiness">Failed readiness</button></div><label class="lab-toggle" for="real-chaos"><input type="checkbox" id="real-chaos"> Inject it for real (this API only, expires in 60 s)</label><div class="incident-game" id="incident-game" hidden><div class="game-clock"><span id="game-step">STEP 1 OF 4</span><b id="game-clock">00:00</b></div><p class="game-prompt" id="game-prompt"></p><div class="game-choices" id="game-choices"></div><p class="game-feedback" id="game-feedback" aria-live="polite"></p></div><button class="ghost-action" id="reset-scenario" type="button">Reset lab</button><p class="ops-hint" id="game-best"></p></article>
-        <article class="ops-card deployment-card"><div class="ops-card-head"><span>DEPLOYMENT LAB</span><span id="rollout-state">IDLE</span></div><h3>Roll out a new version safely</h3><p>Two replicas, <code>maxSurge 1</code>, <code>maxUnavailable 0</code>. A new pod must pass readiness before an old one leaves.</p><div class="rollout-stage" aria-live="polite"><div class="rollout-service"><span>Service</span><b id="rollout-traffic">0 req</b></div><div class="pod-grid" id="pod-grid"></div></div><label class="lab-toggle" for="bad-release"><input type="checkbox" id="bad-release"> Ship a release that fails readiness</label><div class="rollout-actions"><button id="start-rollout" type="button">Start rollout</button><button class="ghost-action" id="rollback" type="button">Rollback</button></div><p class="rollout-note" id="rollout-note">This simulates the Deployment controller in the browser; it does not call kubectl.</p></article>
+        <article class="ops-card status-card"><div class="ops-card-head"><span>LIVE SYSTEM SNAPSHOT</span><button id="refresh-ops" type="button">Refresh</button></div><div class="ops-stats"><div><small>API</small><b id="ops-api">Checking…</b></div><div><small>READINESS</small><b id="ops-db">Checking…</b></div><div><small>OPEN INCIDENTS</small><b id="ops-incidents">—</b></div><div><small>SERVICES</small><b id="ops-services">—</b></div></div><p class="served-by">Answered by <b id="ops-instance">—</b></p><div class="spark-row"><div><span>P95 LATENCY · 10 S</span><b id="spark-latency-value">— ms</b><svg id="spark-latency" viewBox="0 0 120 34" preserveAspectRatio="none" role="img" aria-label="Recent p95 latency"></svg></div><div><span>REQUESTS / S</span><b id="spark-rate-value">—</b><svg id="spark-rate" viewBox="0 0 120 34" preserveAspectRatio="none" role="img" aria-label="Recent request rate"></svg></div></div><div class="budget"><div><span>ERROR BUDGET · 95% UNDER 300 MS</span><b id="budget-value">—</b></div><i><em id="budget-bar"></em></i></div><ul class="alert-list" id="alert-list" aria-live="polite"></ul><button id="send-burst" type="button">Send 50 requests</button><p class="ops-hint">Charts poll <code>/api/ops/summary</code> every two seconds while this section is on screen. Send a burst to make them move.</p></article>
+        <article class="ops-card incident-card"><div class="ops-card-head"><span>INCIDENT LAB</span><span id="scenario-state">NORMAL</span></div><h3 id="scenario-title">Diagnose against the clock</h3><p id="scenario-copy">Pick a failure, then choose each next step. A wrong turn costs two minutes. Aim for the lowest time to recovery.</p><div class="scenario-actions" id="scenario-picker"></div><label class="lab-toggle" for="real-chaos"><input type="checkbox" id="real-chaos"> <span id="real-chaos-label">Inject it for real where possible (this API only, expires in 60 s)</span></label><div class="incident-game" id="incident-game" hidden><div class="game-clock"><span id="game-step">STEP 1 OF 4</span><b id="game-clock">00:00</b></div><p class="game-prompt" id="game-prompt"></p><div class="game-choices" id="game-choices"></div><p class="game-feedback" id="game-feedback" aria-live="polite"></p></div><button class="ghost-action" id="reset-scenario" type="button">Reset lab</button><p class="ops-hint" id="game-best"></p></article>
+        <article class="ops-card deployment-card"><div class="ops-card-head"><span>DEPLOYMENT LAB</span><span id="rollout-state">IDLE</span></div><h3>Roll out a new version safely</h3><div class="segmented" id="rollout-strategy" role="group" aria-label="Rollout strategy"><button type="button" data-strategy="rolling" class="active">Rolling</button><button type="button" data-strategy="bluegreen">Blue-green</button><button type="button" data-strategy="canary">Canary</button></div><p id="strategy-copy"></p><div class="rollout-stage" aria-live="polite"><div class="rollout-service"><span>Service</span><b id="rollout-traffic">0 req</b></div><div class="traffic-split" id="traffic-split" aria-hidden="true"><i id="split-old"></i><em id="split-new"></em></div><div class="split-legend"><span id="split-old-label"></span><span id="split-new-label"></span></div><div class="pod-grid" id="pod-grid"></div></div><label class="lab-toggle" for="bad-release"><input type="checkbox" id="bad-release"> Ship a release that fails readiness</label><div class="rollout-actions"><button id="start-rollout" type="button">Start rollout</button><button class="ghost-action" id="rollback" type="button">Rollback</button></div><p class="rollout-note" id="rollout-note">This simulates the Deployment controller in the browser; it does not call kubectl.</p></article>
+      </div>
+      <div class="ops-pair reveal">
+        <article class="kubectl-card"><div class="ops-card-head"><span>KUBECTL · DEPLOYMENT LAB CLUSTER</span><b>SIMULATED</b></div><div class="kubectl-screen" id="kubectl-screen" tabindex="0" role="log" aria-label="kubectl output"></div><form class="kubectl-form" id="kubectl-form" autocomplete="off"><label for="kubectl-input">$</label><input id="kubectl-input" type="text" spellcheck="false" autocapitalize="off" placeholder="kubectl get pods" aria-label="kubectl command"><button type="submit">Run</button></form><div class="kubectl-chips" id="kubectl-chips"></div></article>
+        <article class="board-card"><div class="ops-card-head"><span>INCIDENT BOARD</span><b id="board-count">—</b></div><p>These are the real incidents in the API’s data store. Open one, move it through its states, and watch the event stream and the counters follow.</p><form class="board-form" id="board-form"><input id="board-title" type="text" maxlength="120" placeholder="What is wrong?" aria-label="Incident title" required><select id="board-severity" aria-label="Severity"><option>low</option><option selected>medium</option><option>high</option><option>critical</option></select><button type="submit">Open incident</button></form><ul class="board-list" id="board-list" aria-live="polite"></ul></article>
       </div>
       <article class="event-console reveal"><div class="ops-card-head"><span>LIVE EVENT STREAM</span><b id="event-connection">CONNECTING</b></div><p>Server-Sent Events make API changes visible without polling. Create an incident in the API playground, or inject a fault in the incident lab, and watch it arrive here.</p><ol id="event-feed"><li>Waiting for the server event stream…</li></ol></article>
       <div class="observability-guide reveal"><div><span>LOGS</span><b>What happened?</b><p>Use a request ID and timestamp to reconstruct one event.</p></div><div><span>METRICS</span><b>How is it behaving?</b><p>Use rates, errors, and duration to see trends and impact.</p></div><div><span>TRACES</span><b>Where did time go?</b><p>Follow one request across boundaries—the request map above is a trace model.</p></div></div>
@@ -223,9 +274,11 @@
   </main>
 
   <footer><a class="brand" href="#top"><span class="brand-mark"><i></i><i></i><i></i></span><span>opslab<span class="brand-dot">.</span></span></a><p>Built to understand the machinery.</p><span>Node.js · Docker · Kubernetes · Terraform</span></footer>
+  <div class="tour" id="tour" hidden><div class="tour-ring" id="tour-ring"></div><div class="tour-card" role="dialog" aria-modal="false" aria-labelledby="tour-title"><span id="tour-step"></span><h3 id="tour-title"></h3><p id="tour-text"></p><div><button type="button" id="tour-skip">End tour</button><button type="button" id="tour-back">Back</button><button type="button" id="tour-next">Next →</button></div></div></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/content.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/labs.js" defer></script>
+  <script src="/learn.js" defer></script>
 </body>
 </html>

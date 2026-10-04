@@ -3,6 +3,7 @@
 
 export interface ChaosState {
   latencyMs: number;
+  errorRate: number;
   failReadiness: boolean;
   expiresAt: string | null;
 }
@@ -11,13 +12,21 @@ const maxLatencyMs = 3000;
 const maxDurationSeconds = 120;
 const defaultDurationSeconds = 60;
 
-export const chaosEnabled = process.env.OPSLAB_CHAOS !== 'off';
+// On for local development and tests. A production build must opt in with
+// OPSLAB_CHAOS=on, because the endpoint deliberately degrades the service.
+export const chaosEnabled = process.env.OPSLAB_CHAOS
+  ? process.env.OPSLAB_CHAOS === 'on'
+  : process.env.NODE_ENV !== 'production';
 
-let state: ChaosState = { latencyMs: 0, failReadiness: false, expiresAt: null };
+// When set, changing faults also requires this value in the x-opslab-chaos-token header.
+export const chaosToken = process.env.OPSLAB_CHAOS_TOKEN ?? null;
+
+const idle: ChaosState = { latencyMs: 0, errorRate: 0, failReadiness: false, expiresAt: null };
+let state: ChaosState = { ...idle };
 let expiresAtMs = 0;
 
 export function clearChaos() {
-  state = { latencyMs: 0, failReadiness: false, expiresAt: null };
+  state = { ...idle };
   expiresAtMs = 0;
   return state;
 }
@@ -31,14 +40,15 @@ export function getChaos() {
 
 function clamp(value: unknown, minimum: number, maximum: number, fallback: number) {
   const number = Number(value);
-  return Number.isFinite(number) ? Math.min(maximum, Math.max(minimum, Math.round(number))) : fallback;
+  return Number.isFinite(number) ? Math.min(maximum, Math.max(minimum, number)) : fallback;
 }
 
-export function setChaos(input: { latencyMs?: unknown; failReadiness?: unknown; durationSeconds?: unknown }) {
-  const durationSeconds = clamp(input.durationSeconds, 5, maxDurationSeconds, defaultDurationSeconds);
+export function setChaos(input: { latencyMs?: unknown; errorRate?: unknown; failReadiness?: unknown; durationSeconds?: unknown }) {
+  const durationSeconds = Math.round(clamp(input.durationSeconds, 5, maxDurationSeconds, defaultDurationSeconds));
   expiresAtMs = Date.now() + durationSeconds * 1000;
   state = {
-    latencyMs: clamp(input.latencyMs, 0, maxLatencyMs, 0),
+    latencyMs: Math.round(clamp(input.latencyMs, 0, maxLatencyMs, 0)),
+    errorRate: Number(clamp(input.errorRate, 0, 1, 0).toFixed(2)),
     failReadiness: input.failReadiness === true,
     expiresAt: new Date(expiresAtMs).toISOString(),
   };

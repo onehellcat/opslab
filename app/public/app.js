@@ -73,7 +73,8 @@ async function showStage(key, { stream = false, fail = false } = {}) {
     explanation(stage.why, stage.verify) +
     factGrid('stage-facts', stage.facts) +
     '</div><div class="terminal"><div class="terminal-head"><span></span><span></span><span></span><b>.github/workflows/ci.yml</b></div>' +
-    `<pre><code><span class="prompt">$</span> ${escapeHtml(stage.command)}\n</code></pre></div>`;
+    `<pre><code><span class="prompt">$</span> ${escapeHtml(stage.command)}\n</code></pre>` +
+    `<div class="terminal-yaml"><b>WORKFLOW THAT RUNS THIS</b><pre>${log.yaml.map(escapeHtml).join('\n')}</pre></div></div>`;
 
   const code = $('code', stageDetail);
   for (const line of lines) {
@@ -226,7 +227,7 @@ async function runTrace() {
   traceButton.disabled = true;
   traceButton.innerHTML = '<span>◌</span> Tracing…';
   traceHops.forEach((hop) => hop.classList.remove('done', 'tracing'));
-  traceProgress.className = '';
+  traceProgress.className = 'moving';
   traceProgress.style.width = '0';
 
   for (const [index, hop] of traceHops.entries()) {
@@ -239,12 +240,19 @@ async function runTrace() {
   }
 
   // The response travels back along the same path.
-  traceProgress.className = 'returning';
+  traceProgress.className = 'moving returning';
   traceProgress.style.width = '0';
   await pace(650);
+  traceProgress.className = '';
 
   const result = await sendRequest('/api/services', { method: 'GET' });
-  if (result) renderWaterfall(result);
+  if (result) {
+    renderWaterfall(result);
+    const traceUi = window.opslabTracing?.ui;
+    $('#trace-id').textContent = result.traceId ? `TRACE ${result.traceId.slice(0, 8)}` : 'TRACE · LOCAL';
+    $('#trace-link').hidden = !(result.traceId && traceUi);
+    if (result.traceId && traceUi) $('#trace-link').href = `${traceUi}/trace/${result.traceId}`;
+  }
   traceButton.disabled = false;
   traceButton.innerHTML = '<span>↻</span> Trace again';
 }
@@ -261,6 +269,7 @@ const requestJson = $('#request-json');
 const roleSelect = $('#operator-role');
 
 const requestExamples = {
+  '/api/chaos': '{"latencyMs":400,"errorRate":0,"failReadiness":false,"durationSeconds":30}',
   '/api/services': '{"name":"Catalog API","owner":"Platform","status":"healthy"}',
   '/api/incidents': '{"title":"Example incident","severity":"medium","status":"open"}',
 };
@@ -304,7 +313,8 @@ async function sendRequest(path = endpointSelect.value, { method = methodSelect.
     status.textContent = statusText;
     status.classList.toggle('is-error', !response.ok);
     body.innerHTML = typeof data === 'string' ? escapeHtml(data) : colourJson(data);
-    return { ms, statusText, timing: parseServerTiming(response.headers.get('server-timing')) };
+    $('#response-instance').textContent = response.headers.get('x-served-by') ? `via ${response.headers.get('x-served-by')}` : '';
+    return { ms, statusText, timing: parseServerTiming(response.headers.get('server-timing')), traceId: response.headers.get('x-trace-id') };
   } catch (error) {
     status.textContent = 'OFFLINE';
     status.classList.add('is-error');
@@ -371,18 +381,21 @@ lessonCards.forEach((card) => {
   const renderComplete = () => {
     const done = completedLessons.has(lesson);
     card.classList.toggle('completed', done);
-    completeButton.textContent = done ? '●' : '○';
-    completeButton.setAttribute('aria-label', `Mark ${lesson} lesson ${done ? 'incomplete' : 'complete'}`);
+    $('i', completeButton).textContent = done ? '●' : '○';
+    $('span', completeButton).textContent = done ? 'Done' : 'Mark done';
     completeButton.setAttribute('aria-pressed', String(done));
   };
 
-  completeButton.addEventListener('click', () => {
-    if (!completedLessons.delete(lesson)) completedLessons.add(lesson);
+  // Also used by the lesson quiz in learn.js to mark a lesson done.
+  card.setComplete = (done) => {
+    if (done) completedLessons.add(lesson);
+    else completedLessons.delete(lesson);
     writeStore('opslab-lessons', [...completedLessons]);
     renderComplete();
     renderLessonProgress();
     if (completedLessons.size === lessonCards.length) earnBadge('scholar');
-  });
+  };
+  completeButton.addEventListener('click', () => card.setComplete(!completedLessons.has(lesson)));
 
   expand.addEventListener('click', () => {
     const opening = expand.getAttribute('aria-expanded') !== 'true';

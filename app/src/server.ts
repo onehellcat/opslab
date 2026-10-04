@@ -5,14 +5,21 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { chaosEnabled, clearChaos, getChaos, setChaos } from './chaos.js';
-import { observeRequest, recentWindow, renderRequestMetrics, requestTotals } from './metrics.js';
+import { hostname } from 'node:os';
+import { context, SpanKind, SpanStatusCode, trace, type Span } from '@opentelemetry/api';
+import { chaosEnabled, chaosToken, clearChaos, getChaos, setChaos } from './chaos.js';
+import { observeRequest, recentWindow, renderRequestMetrics, requestTotals, sloStatus } from './metrics.js';
+import { shutdownTracing, tracer, traceUi, tracingEnabled } from './tracing.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
     timings: Record<string, number>;
+    span: Span;
   }
 }
+
+// In Kubernetes this is the pod name, which shows which replica answered a request.
+const instance = hostname();
 
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'test' ? 'silent' : 'info') },
@@ -37,12 +44,28 @@ function publishEvent(type: string, message: string) {
 // dashboard stay responsive enough to observe the fault.
 const chaosLatencyRoutes = new Set(['/api/services', '/api/incidents', '/api/incidents/:id']);
 
-app.addHook('onRequest', async (request) => {
+app.addHook('onRequest', async (request, reply) => {
+  const route = request.routeOptions.url ?? 'unmatched';
   request.timings = {};
-  const { latencyMs } = getChaos();
-  if (latencyMs > 0 && chaosLatencyRoutes.has(request.routeOptions.url ?? '')) {
-    await sleep(latencyMs);
+  request.span = tracer.startSpan(`${request.method} ${route}`, {
+    kind: SpanKind.SERVER,
+    attributes: { 'http.request.method': request.method, 'http.route': route, 'url.path': request.url.split('?')[0] },
+  });
+  reply.header('x-served-by', instance);
+  if (tracingEnabled) {
+    reply.header('x-trace-id', request.span.spanContext().traceId);
+  }
+
+  const { latencyMs, errorRate } = getChaos();
+  if (!chaosLatencyRoutes.has(route)) {
+    return;
+  }
+  if (latencyMs > 0) {
+    await childSpan(request, 'injected latency (incident lab)', () => sleep(latencyMs));
     request.timings.chaos = latencyMs;
+  }
+  if (errorRate > 0 && Math.random() < errorRate) {
+    return reply.code(500).send({ error: 'Injected failure from the incident lab' });
   }
 });
 
@@ -56,6 +79,11 @@ app.addHook('onSend', async (request, reply, payload) => {
 app.addHook('onResponse', async (request, reply) => {
   const route = request.routeOptions.url ?? 'unmatched';
   observeRequest(request.method, route, reply.statusCode, reply.elapsedTime);
+  request.span?.setAttribute('http.response.status_code', reply.statusCode);
+  if (reply.statusCode >= 500) {
+    request.span?.setStatus({ code: SpanStatusCode.ERROR });
+  }
+  request.span?.end();
   request.log.info({ requestId: request.id, method: request.method, route, statusCode: reply.statusCode, durationMs: Math.round(reply.elapsedTime) }, 'request completed');
 });
 
@@ -69,6 +97,7 @@ const staticFiles: Record<string, { file: string; type: string }> = {
   '/content.js': { file: 'content.js', type: 'application/javascript; charset=utf-8' },
   '/app.js': { file: 'app.js', type: 'application/javascript; charset=utf-8' },
   '/labs.js': { file: 'labs.js', type: 'application/javascript; charset=utf-8' },
+  '/learn.js': { file: 'learn.js', type: 'application/javascript; charset=utf-8' },
   '/ui-kit': { file: 'ui-kit/index.html', type: 'text/html; charset=utf-8' },
   '/ui-kit/opslab-ui.css': { file: 'ui-kit/opslab-ui.css', type: 'text/css; charset=utf-8' },
   '/ui-kit/ui-kit.js': { file: 'ui-kit/ui-kit.js', type: 'application/javascript; charset=utf-8' },
@@ -192,11 +221,24 @@ async function ensureDatabaseSchema() {
   }
 }
 
+// Runs work inside a span that is a child of the request's server span.
+async function childSpan<T>(request: FastifyRequest, name: string, work: () => Promise<T>) {
+  const span = tracer.startSpan(name, { kind: SpanKind.INTERNAL }, trace.setSpan(context.active(), request.span));
+  try {
+    return await work();
+  } catch (error) {
+    span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
+    throw error;
+  } finally {
+    span.end();
+  }
+}
+
 // Records time spent in the data store so it can be reported in Server-Timing.
 async function measureStore<T>(request: FastifyRequest, work: () => Promise<T>) {
   const started = performance.now();
   try {
-    return await work();
+    return await childSpan(request, databaseEnabled ? 'postgres query' : 'in-memory store', work);
   } finally {
     request.timings.db = (request.timings.db ?? 0) + performance.now() - started;
   }
@@ -395,25 +437,42 @@ app.patch('/api/incidents/:id', async (request, reply) => {
   return incident;
 });
 
-app.get('/api/chaos', async () => ({ enabled: chaosEnabled, ...getChaos() }));
+app.get('/api/chaos', async () => ({ enabled: chaosEnabled, tokenRequired: Boolean(chaosToken), ...getChaos() }));
 
-app.post('/api/chaos', async (request, reply) => {
+// Returns an error message when this caller may not change faults, otherwise null.
+function chaosDenied(request: FastifyRequest) {
   if (isViewer(request)) {
-    return reply.code(403).send({ error: 'Viewer role cannot run labs' });
+    return 'Viewer role cannot run labs';
   }
   if (!chaosEnabled) {
-    return reply.code(403).send({ error: 'Fault injection is disabled (OPSLAB_CHAOS=off)' });
+    return 'Fault injection is disabled on this server (set OPSLAB_CHAOS=on to allow it)';
+  }
+  if (chaosToken && request.headers['x-opslab-chaos-token'] !== chaosToken) {
+    return 'Fault injection needs a valid x-opslab-chaos-token header';
+  }
+  return null;
+}
+
+app.post('/api/chaos', async (request, reply) => {
+  const denied = chaosDenied(request);
+  if (denied) {
+    return reply.code(403).send({ error: denied });
   }
 
   const state = setChaos((request.body ?? {}) as Record<string, unknown>);
-  const faults = [state.latencyMs ? `${state.latencyMs} ms latency on data routes` : '', state.failReadiness ? 'readiness failing' : ''].filter(Boolean);
+  const faults = [
+    state.latencyMs ? `${state.latencyMs} ms latency on data routes` : '',
+    state.errorRate ? `${Math.round(state.errorRate * 100)}% errors on data routes` : '',
+    state.failReadiness ? 'readiness failing' : '',
+  ].filter(Boolean);
   publishEvent('chaos', faults.length ? `Fault injected: ${faults.join(' and ')}` : 'Fault injection cleared');
   return { enabled: chaosEnabled, ...state };
 });
 
 app.delete('/api/chaos', async (request, reply) => {
-  if (isViewer(request)) {
-    return reply.code(403).send({ error: 'Viewer role cannot run labs' });
+  const denied = chaosDenied(request);
+  if (denied) {
+    return reply.code(403).send({ error: denied });
   }
 
   const wasActive = getChaos().expiresAt !== null;
@@ -426,6 +485,21 @@ app.delete('/api/chaos', async (request, reply) => {
 
 function isActive(incident: Incident) {
   return incident.status !== 'resolved';
+}
+
+// The same conditions as observability/alerts.yml, evaluated in-process so the UI can show them.
+function evaluateAlerts() {
+  const recent = recentWindow();
+  const slo = sloStatus();
+  const chaos = getChaos();
+  const errorRatio = recent.requests ? recent.errors / recent.requests : 0;
+
+  return [
+    { name: 'HighLatency', severity: 'warning', firing: recent.p95_ms > slo.latency_objective_ms, detail: `p95 ${recent.p95_ms} ms against a ${slo.latency_objective_ms} ms objective` },
+    { name: 'HighErrorRate', severity: 'critical', firing: errorRatio > 0.05, detail: `${(errorRatio * 100).toFixed(1)}% of recent requests failed` },
+    { name: 'ErrorBudgetBurn', severity: 'critical', firing: slo.budget_remaining < 0.5, detail: `${Math.round(Math.max(slo.budget_remaining, 0) * 100)}% of the error budget left` },
+    { name: 'ReadinessFailing', severity: 'critical', firing: chaos.failReadiness, detail: 'this replica is answering 503 on /health/ready' },
+  ];
 }
 
 app.get('/api/ops/summary', async () => {
@@ -443,7 +517,11 @@ app.get('/api/ops/summary', async () => {
     services_total: loadedServices.length,
     uptime_seconds: Math.round((Date.now() - startedAt) / 1000),
     store: databaseEnabled ? 'postgres' : 'in-memory',
-    chaos: getChaos(),
+    instance,
+    chaos: { enabled: chaosEnabled, tokenRequired: Boolean(chaosToken), ...getChaos() },
+    slo: sloStatus(),
+    alerts: evaluateAlerts(),
+    tracing: { enabled: tracingEnabled, ui: traceUi },
     status: 'ok',
   };
 });
@@ -452,6 +530,7 @@ app.get('/metrics', async (_request, reply) => {
   const loadedServices = await loadServices();
   const loadedIncidents = await loadIncidents();
   const chaos = getChaos();
+  const slo = sloStatus();
 
   return reply.type('text/plain; version=0.0.4').send([
     ...renderRequestMetrics(),
@@ -461,6 +540,8 @@ app.get('/metrics', async (_request, reply) => {
     '# TYPE opslab_services_total gauge', `opslab_services_total ${loadedServices.length}`,
     '# HELP opslab_chaos_active Whether the incident lab is currently injecting a fault',
     '# TYPE opslab_chaos_active gauge', `opslab_chaos_active ${chaos.expiresAt ? 1 : 0}`,
+    '# HELP opslab_slo_error_budget_remaining Share of the error budget left in the rolling window (1 = untouched)',
+    '# TYPE opslab_slo_error_budget_remaining gauge', `opslab_slo_error_budget_remaining ${slo.budget_remaining}`,
     '# HELP opslab_uptime_seconds Seconds since the process started',
     '# TYPE opslab_uptime_seconds gauge', `opslab_uptime_seconds ${Math.round((Date.now() - startedAt) / 1000)}`,
   ].join('\n') + '\n');
@@ -469,13 +550,31 @@ app.get('/metrics', async (_request, reply) => {
 app.addHook('onClose', async () => {
   eventClients.forEach((client) => client.end());
   await pool?.end();
+  await shutdownTracing();
 });
 
 const port = Number(process.env.PORT ?? 3000);
 
+// The database may still be starting (for example when both are deployed together),
+// so wait for it instead of exiting and relying on the platform to restart the process.
+async function waitForDatabase(attempts = 20, delayMs = 3000) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await ensureDatabaseSchema();
+      return;
+    } catch (error) {
+      if (attempt >= attempts) {
+        throw error;
+      }
+      app.log.warn({ attempt, error: (error as Error).message }, 'database not ready, retrying');
+      await sleep(delayMs);
+    }
+  }
+}
+
 const start = async () => {
   try {
-    await ensureDatabaseSchema();
+    await waitForDatabase();
     await app.listen({ port, host: '0.0.0.0' });
     console.log(`OpsLab API listening on http://0.0.0.0:${port}`);
   } catch (error) {

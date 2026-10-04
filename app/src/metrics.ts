@@ -102,3 +102,27 @@ export function renderRequestMetrics() {
 
   return lines;
 }
+
+// Service level objective: a request is "good" when it is not a server error and
+// finishes within the latency objective. The error budget is the share of
+// requests allowed to be bad before the target is missed.
+export const sloTarget = 0.95;
+export const sloLatencyMs = 300;
+
+export function sloStatus(windowSeconds = 300) {
+  const cutoff = Date.now() - windowSeconds * 1000;
+  const samples = recent.filter((sample) => sample.at >= cutoff);
+  const bad = samples.filter((sample) => sample.error || sample.ms > sloLatencyMs).length;
+  const allowedBad = samples.length * (1 - sloTarget);
+  const budgetRemaining = allowedBad > 0 ? 1 - bad / allowedBad : 1;
+
+  return {
+    target: sloTarget,
+    latency_objective_ms: sloLatencyMs,
+    window_seconds: windowSeconds,
+    total: samples.length,
+    bad,
+    compliance: samples.length ? Number(((samples.length - bad) / samples.length).toFixed(4)) : 1,
+    budget_remaining: Number(Math.max(-1, budgetRemaining).toFixed(3)),
+  };
+}

@@ -4,6 +4,10 @@
 
 OpsLab is a deliberately small, fully working platform for learning the code-to-deploy lifecycle. It pairs an interactive browser-based study guide with a TypeScript API, PostgreSQL, Docker Compose, Kubernetes manifests, Terraform, and CI.
 
+![The OpsLab guide](docs/screenshot-hero.png)
+
+![Live snapshot, incident lab and a canary rollout](docs/screenshot-operations.png)
+
 ![OpsLab architecture](docs/architecture.svg)
 
 ## Why OpsLab?
@@ -20,13 +24,13 @@ Most DevOps tutorials teach tools in isolation. OpsLab connects the dots: each c
 | Area | What you’ll find |
 | --- | --- |
 | Application | Fastify + TypeScript service with health, service, incident, and metrics endpoints |
-| Data | PostgreSQL 16 with a connection-pooled API |
+| Data | PostgreSQL 16 with a connection-pooled API, in Compose and in Kubernetes |
 | Local runtime | Multi-stage Docker build and Docker Compose |
-| Delivery | GitHub Actions CI: install, type-check, test, image build, plus Terraform, Kubernetes manifest, and Compose validation |
-| Orchestration | Kubernetes Deployment, Service, namespace, readiness, and liveness probes |
+| Delivery | GitHub Actions CI: type check, API tests, browser tests, image build with vulnerability scan and SBOM, plus Terraform, manifest, Compose, and alert-rule validation |
+| Orchestration | Kubernetes Deployment, PostgreSQL StatefulSet, Secret, Services, probes, resource requests, and a PodDisruptionBudget |
 | Infrastructure as code | Terraform declarations for the Kubernetes resources |
-| Learning UI | Interactive pipeline, architecture, measured request trace, concept lessons with simulators, API playground, and incident and deployment labs |
-| Observability | Optional Prometheus and Grafana with a provisioned dashboard |
+| Learning UI | Interactive pipeline, architecture, measured request trace, nine lessons with simulators and checks, API playground, incident lab, deployment lab (rolling, blue-green, canary), kubectl terminal, and incident board |
+| Observability | Optional Prometheus with alert rules, Grafana with a provisioned dashboard, and Jaeger for traces |
 
 ## Quick start
 
@@ -49,7 +53,7 @@ docker compose up --build
 
 Set `OPSLAB_PORT` to expose the UI on a different host port, for example `OPSLAB_PORT=8080 docker compose up --build`.
 
-Add Prometheus (port 9090) and Grafana (port 3001) with a ready-made dashboard:
+Add Prometheus (port 9090), Grafana (port 3001) with a ready-made dashboard, and Jaeger (port 16686) for traces:
 
 ```bash
 docker compose --profile observe up --build
@@ -100,6 +104,9 @@ opslab/
 ```bash
 # App quality checks
 cd app && npm run lint && npm test && npm run build
+
+# Browser tests (first run: npx playwright install chromium)
+cd app && npm run test:e2e
 
 # Local containers
 docker compose up --build

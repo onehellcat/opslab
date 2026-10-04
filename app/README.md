@@ -29,9 +29,12 @@ DATABASE_PASSWORD=development
 ## Test commands
 
 ```bash
-npm test
+npm test            # API tests (Vitest)
+npm run test:e2e    # browser tests (Playwright); first run: npx playwright install chromium
 npm run build
 ```
+
+The browser tests start their own server on port 3100 with the in-memory store, so they need no database and do not disturb a stack running on port 3000.
 
 ## Reusable UI kit
 
@@ -44,7 +47,8 @@ stylesheet, usage notes, and examples live in `public/ui-kit/`.
 | --- | --- |
 | `public/content.js` | Teaching copy: pipeline stages, architecture nodes, trace hops, endpoint notes |
 | `public/app.js` | Pipeline, architecture, request trace, lessons, and API playground |
-| `public/labs.js` | Live signals, incident lab, deployment lab, lesson simulators, theme, badges |
+| `public/labs.js` | Live signals, incident lab, deployment lab, kubectl terminal, incident board, theme, badges |
+| `public/learn.js` | Lesson simulators, lesson checks, and the guided tour |
 | `public/styles.css` | Base layout and components |
 | `public/labs.css` | Lab styles and the dark theme |
 
@@ -52,9 +56,11 @@ Assets are re-read on every request unless `NODE_ENV=production`, so edits show 
 
 ## Operations lab
 
-- **Live system snapshot** polls `/api/ops/summary` and draws rolling p95 latency and request-rate charts. "Send 50 requests" makes them move.
+- **Live system snapshot** polls `/api/ops/summary` and draws rolling p95 latency and request-rate charts, the error budget, and any firing alerts. "Send 50 requests" makes them move.
 - **Incident lab** is a timed diagnosis exercise. It is a browser simulation unless you tick "Inject it for real", which calls the fault-injection API below.
-- **Deployment lab** simulates a two-replica rolling update with `maxSurge 1` and `maxUnavailable 0`, including a release that fails readiness. It never calls `kubectl`.
+- **Deployment lab** simulates rolling, blue-green, and canary rollouts, including a release that fails. It never calls `kubectl`.
+- **kubectl terminal** runs a small set of `kubectl` commands against the deployment lab's simulated cluster.
+- **Incident board** lists the real incidents in the data store and lets you open, investigate, and resolve them.
 - **Event stream** uses Server-Sent Events from `/api/events` for incident, service, and fault changes.
 - **API playground** sends GET or POST requests with an editable JSON body. Choose Viewer to see write routes return `403`.
 
@@ -68,13 +74,23 @@ curl -X POST localhost:3000/api/chaos -H "content-type: application/json" \
 ```
 
 - `latencyMs` (0–3000) delays `/api/services` and `/api/incidents`.
+- `errorRate` (0–1) makes that share of requests to the same routes answer `500`.
 - `failReadiness` makes `/health/ready` answer `503`, which is what removes a pod from a Kubernetes Service.
 - Every fault expires on its own (120 seconds at most); `DELETE /api/chaos` clears it sooner.
-- Set `OPSLAB_CHAOS=off` to disable the endpoint. The Viewer role cannot use it.
+- It is on in development and tests. A production build (`NODE_ENV=production`) leaves it off unless `OPSLAB_CHAOS=on`; the Compose file turns it on because the stack is a local lab.
+- Set `OPSLAB_CHAOS_TOKEN` to also require that value in an `x-opslab-chaos-token` header. The Viewer role can never use it.
 
 ## Request logs and timing
 
 Every completed request writes one structured JSON log line with the request id, method, route, status code, and duration. Responses carry a `Server-Timing` header (`db`, `chaos`, `total`), which the request trace in the UI uses to draw its timing waterfall.
+
+## Service level objective and alerts
+
+The objective is 95% of requests answered without a server error in under 300 ms, over a rolling five minutes. `/api/ops/summary` reports the remaining error budget and four alert conditions (`HighLatency`, `HighErrorRate`, `ErrorBudgetBurn`, `ReadinessFailing`). The same conditions exist as Prometheus rules in `observability/alerts.yml`.
+
+## Tracing
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` to send a span per request, with child spans for the data store and any injected latency, to an OTLP collector. Each response then carries an `x-trace-id` header, and `OPSLAB_TRACE_UI` makes the request trace in the UI link to that trace. Every response also carries `x-served-by` with the hostname, which is the pod name in Kubernetes.
 
 ## Metrics and dashboards
 

@@ -7,9 +7,14 @@ docker compose --profile observe up --build
 ```
 
 - **Prometheus** at `http://localhost:9090` scrapes the API's `/metrics` endpoint every five seconds.
+- **Jaeger** at `http://localhost:16686` receives one trace per API request. Run "Trace request" in the UI and follow its "Open in Jaeger" link.
 - **Grafana** at `http://localhost:3001` opens on the provisioned **OpsLab API overview** dashboard. The default credentials are `admin` / `admin`; they are for local use only.
 
 The datasource and dashboard are provisioned from `grafana/`, so there is nothing to click through. To change the dashboard, edit `grafana/dashboards/opslab-overview.json` and restart Grafana.
+
+## Alerts
+
+`alerts.yml` defines `HighLatency`, `HighErrorRate`, `ErrorBudgetBurn`, and `FaultInjected`. See their state at `http://localhost:9090/alerts`. The application evaluates the same conditions itself and shows them in the live snapshot, so no Alertmanager is needed for the lab.
 
 ## Useful queries
 
