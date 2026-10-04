@@ -5,6 +5,11 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -55,8 +60,35 @@ jobs:
       - name: Type check
         run: npm run lint
 
+      - name: Check frontend scripts parse
+        run: for file in public/*.js public/ui-kit/*.js; do node --check "$file"; done
+
       - name: Run tests
         run: npm test
 
       - name: Build Docker image
         run: docker build -t opslab-api:test .
+
+  infrastructure:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Validate Terraform
+        working-directory: terraform
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - name: Validate Kubernetes manifests
+        run: docker run --rm -v "$PWD/kubernetes:/manifests:ro" ghcr.io/yannh/kubeconform:v0.6.7 -strict -summary /manifests
+
+      - name: Validate Compose file
+        run: docker compose --profile observe config --quiet

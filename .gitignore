@@ -6,3 +6,11 @@ coverage/
 .vite/
 .DS_Store
 *.log
+
+# Terraform working files
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Local Claude Code settings
+.claude/
