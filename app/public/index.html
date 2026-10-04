@@ -9,13 +9,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/labs.css">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('opslab-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch(e){}</script>
 </head>
 <body>
   <div class="noise"></div>
   <header class="topbar">
     <a class="brand" href="#top" aria-label="OpsLab home"><span class="brand-mark"><i></i><i></i><i></i></span><span>opslab<span class="brand-dot">.</span></span></a>
-    <nav aria-label="Main navigation"><a class="active" href="#pipeline">Pipeline</a><a href="#architecture">Architecture</a><a href="#request-path">Request path</a><a href="#concepts">Knowledge</a><a href="#playground">Playground</a><a href="#operations">Operate</a></nav>
-    <div class="header-meta"><span class="live-dot"></span> local lab <kbd>v0.1</kbd></div>
+    <nav aria-label="Main navigation" id="site-nav"><a href="#pipeline">Pipeline</a><a href="#architecture">Architecture</a><a href="#request-path">Request path</a><a href="#concepts">Knowledge</a><a href="#playground">Playground</a><a href="#operations">Operate</a></nav>
+    <div class="header-meta"><span class="health-pill" id="health-pill"><span class="live-dot"></span> <span id="health-pill-text">checking</span></span><button class="icon-button" id="theme-toggle" type="button" aria-label="Switch colour theme" title="Switch colour theme">◐</button><button class="icon-button nav-toggle" id="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="site-nav">☰</button></div>
   </header>
 
   <main id="top">
@@ -25,15 +27,15 @@
       <p class="hero-copy">Follow one change from commit to container to Kubernetes. Every concept below maps to a real file running in this repository.</p>
       <div class="hero-actions"><a class="button primary" href="#pipeline">Explore the pipeline <span>↓</span></a><button class="button ghost" id="quick-health"><span class="pulse-icon"></span> Ping the API</button></div>
       <div class="hero-status" id="health-toast" aria-live="polite"></div>
-      <div class="orbit" aria-hidden="true"><div class="orbit-ring ring-one"><span></span></div><div class="orbit-ring ring-two"><span></span></div><div class="core"><b>OPS</b><small>LAB</small></div><span class="orbit-label label-code">CODE</span><span class="orbit-label label-build">BUILD</span><span class="orbit-label label-ship">SHIP</span></div>
+      <div class="orbit" id="orbit" aria-hidden="true"><div class="orbit-ring ring-one"><span></span></div><div class="orbit-ring ring-two"><span></span></div><div class="core"><b>OPS</b><small>LAB</small></div><span class="orbit-label label-code">CODE</span><span class="orbit-label label-build">BUILD</span><span class="orbit-label label-ship">SHIP</span></div>
     </section>
 
-    <section class="stat-strip reveal" aria-label="Project summary"><div><strong>08</strong><span>API routes</span></div><div><strong>04</strong><span>CI stages</span></div><div><strong>02</strong><span>K8s replicas</span></div><div><strong>100%</strong><span>Local-first</span></div></section>
+    <section class="stat-strip reveal" aria-label="Live system summary"><div><strong id="stat-requests">—</strong><span>Requests served</span></div><div><strong id="stat-services">—</strong><span>Services</span></div><div><strong id="stat-incidents">—</strong><span>Open incidents</span></div><div><strong id="stat-uptime">—</strong><span>Uptime</span></div></section>
 
     <section class="section pipeline-section" id="pipeline">
       <div class="section-heading reveal"><div><div class="eyebrow"><span>02</span> Continuous integration</div><h2>A commit’s journey</h2></div><p>Trigger a simulated run, then select a stage to see what the runner does, why that boundary exists, and how to reproduce the check locally.</p></div>
       <div class="pipeline-shell reveal">
-        <div class="pipeline-toolbar"><div class="commit-info"><span class="branch-icon">⑂</span><div><b>main</b><small>feat: learn the delivery path</small></div></div><button id="run-pipeline" class="run-button"><span>▶</span> Run pipeline</button></div>
+        <div class="pipeline-toolbar"><div class="commit-info"><span class="branch-icon">⑂</span><div><b>main</b><small>feat: learn the delivery path</small></div></div><div class="toolbar-actions"><label class="lab-toggle" for="break-build"><input type="checkbox" id="break-build"> Break the build</label><button id="run-pipeline" class="run-button"><span>▶</span> Run pipeline</button></div></div>
         <div class="pipeline-track" id="pipeline-track">
           <div class="track-line"><div class="track-progress"></div></div>
           <button class="stage active" data-stage="checkout"><span class="stage-index">01</span><span class="stage-icon">⌘</span><b>Checkout</b><small>actions/checkout@v4</small><i></i></button>
@@ -41,6 +43,7 @@
           <button class="stage" data-stage="verify"><span class="stage-index">03</span><span class="stage-icon">✓</span><b>Verify</b><small>typecheck + tests</small><i></i></button>
           <button class="stage" data-stage="image"><span class="stage-index">04</span><span class="stage-icon">◇</span><b>Package</b><small>Docker image</small><i></i></button>
         </div>
+        <p class="pipeline-result" id="pipeline-result" aria-live="polite">Run the pipeline to watch each stage report in. Tick “Break the build” to see a failed quality gate stop the delivery.</p>
         <div class="stage-detail" id="stage-detail">
           <div><span class="detail-kicker">STAGE 01 · SOURCE</span><h3>Bring the exact code into the runner</h3><p>GitHub Actions starts with a clean Ubuntu machine. Checkout copies this repository into that temporary runner so every next command uses the committed source.</p></div>
           <div class="terminal"><div class="terminal-head"><span></span><span></span><span></span><b>workflow.yml</b></div><pre><code><span class="prompt">$</span> actions/checkout@v4
@@ -71,13 +74,7 @@
           <button class="trace-hop" data-hop="database"><span class="hop-number">05</span><span class="hop-icon">▱</span><b>PostgreSQL</b><small>services table</small></button>
         </div>
         <div class="trace-detail" id="trace-detail"></div>
-        <div class="waterfall" aria-label="Illustrative request timing waterfall">
-          <div class="waterfall-head"><span>ILLUSTRATIVE TIMING</span><span>0 ms</span><span>5 ms</span><span>10 ms</span><span>15 ms</span></div>
-          <div><b>Container routing</b><i style="--start:2%;--width:18%"></i><small>2 ms</small></div>
-          <div><b>Fastify handler</b><i style="--start:20%;--width:12%"></i><small>1 ms</small></div>
-          <div><b>Pool + SQL query</b><i style="--start:32%;--width:46%"></i><small>7 ms</small></div>
-          <div><b>JSON response</b><i style="--start:78%;--width:15%"></i><small>2 ms</small></div>
-        </div>
+        <div class="timing" id="waterfall" aria-label="Measured request timing waterfall" aria-live="polite"><p class="wf-empty">Press “Trace request” to send a real <code>GET /api/services</code> and draw where the time went, using the API’s <code>Server-Timing</code> header.</p></div>
       </div>
     </section>
 
@@ -101,6 +98,7 @@
             <div><span>RUNTIME ISOLATION</span><p>A container is not a small virtual machine. It is a normal host process isolated with Linux namespaces and constrained with cgroups. It shares the host kernel, which makes startup fast, but its filesystem and network view appear separate.</p></div>
             <div><span>DATA &amp; FAILURE</span><p>The writable container layer is ephemeral: replacing the container loses changes stored there. Databases therefore mount a volume. Logs should go to stdout and configuration should enter through environment variables so the same image can run unchanged in each environment.</p></div>
             <div><span>COMMON MISCONCEPTION</span><p><code>localhost</code> inside a container means that same container—not your laptop and not another Compose service. Containers reach peers through network DNS names such as <code>postgres</code>; published ports are primarily how the host reaches a container.</p></div>
+            <div class="lesson-toy" id="layer-toy"><span>LAYER CACHE SIMULATOR</span><p>Pick what changed since the last build. Every layer from the first changed instruction onwards is rebuilt.</p><div class="toy-controls" role="group" aria-label="What changed"><button type="button" data-change="none" class="active">Nothing</button><button type="button" data-change="source">src/server.ts</button><button type="button" data-change="deps">package.json</button><button type="button" data-change="base">Base image</button></div><ol class="layer-list" id="layer-list"></ol><p class="toy-result" id="layer-result" aria-live="polite"></p></div>
             <div class="lesson-experiment"><span>TRY IT</span><p>Build the image, then inspect its immutable layer history.</p><button data-lesson-copy="docker history opslab-api:local"><code>docker history opslab-api:local</code><i>Copy</i></button></div>
           </div>
           <footer><code>app/Dockerfile</code><span>5 min</span></footer>
@@ -133,6 +131,7 @@
             <div><span>WHAT STATE DOES</span><p>State binds a Terraform address such as <code>kubernetes_deployment_v1.api</code> to one real API object. It also stores provider-returned attributes needed for future comparisons. State is operational data, not a cache that can always be discarded safely.</p></div>
             <div><span>DRIFT &amp; OWNERSHIP</span><p>A manual cluster edit creates drift between configuration and reality. The next plan may reverse that edit because Terraform treats configuration as the declared owner. Emergency changes should be captured back in code once the incident is stable.</p></div>
             <div><span>TEAM SAFETY</span><p>Production teams normally store state in a remote backend with locking, encryption, and version history. Locking prevents two applies from racing; restricted access matters because state can contain resource identifiers and sensitive values.</p></div>
+            <div class="lesson-toy" id="plan-toy"><span>PLAN SIMULATOR</span><p>State says the Deployment has 2 replicas in namespace <code>opslab</code>. Change the configuration and read the plan Terraform would propose.</p><div class="toy-controls"><label for="plan-replicas">replicas = <b id="plan-replicas-value">2</b></label><input type="range" id="plan-replicas" min="0" max="5" value="2"><label class="lab-toggle" for="plan-rename"><input type="checkbox" id="plan-rename"> Rename the namespace</label></div><pre class="plan-output" id="plan-output" aria-live="polite"></pre></div>
             <div class="lesson-experiment"><span>TRY IT</span><p>Preview proposed actions. A plan reads state but does not apply infrastructure changes.</p><button data-lesson-copy="terraform -chdir=terraform plan"><code>terraform -chdir=terraform plan</code><i>Copy</i></button></div>
           </div>
           <footer><code>terraform/main.tf</code><span>6 min</span></footer>
@@ -176,7 +175,7 @@
           <button class="lesson-expand" aria-expanded="false" aria-controls="observability-details"><span>Explore concept</span><i>+</i></button>
           <div class="lesson-details" id="observability-details" hidden>
             <div><span>THREE SIGNALS</span><p><b>Logs</b> answer “what happened here?” <b>Metrics</b> answer “how is the system behaving overall?” <b>Traces</b> answer “where did this request spend time?” They overlap, but each supports a different investigation scale.</p></div>
-            <div><span>IN THIS PROJECT</span><p><code>GET /metrics</code> exposes request duration, incident count, and service count as JSON. It demonstrates the signal, though production scrapers commonly expect a standard exposition format such as Prometheus text.</p></div>
+            <div><span>IN THIS PROJECT</span><p><code>GET /metrics</code> exposes labelled request counters, a duration histogram, and incident and service gauges in Prometheus text format. <code>GET /api/ops/summary</code> serves the same signals as JSON for this page, and <code>docker compose --profile observe up</code> adds Prometheus and a provisioned Grafana dashboard.</p></div>
             <div><span>USEFUL METRICS</span><p>Start with request rate, error rate, and duration. Add saturation signals for constrained resources such as CPU, memory, connection pools, and queues. Prefer measurements that describe user-visible behavior over counts that merely look busy.</p></div>
             <div><span>STRUCTURED LOGS</span><p>Machine-readable logs use consistent fields such as timestamp, level, service, request ID, route, and outcome. Write them to stdout so the runtime can collect them. Never log passwords, tokens, or unnecessary personal data.</p></div>
             <div><span>CARDINALITY</span><p>A metric label creates a new time series for every distinct value. Bounded labels such as method or route are useful; unbounded values such as user ID or raw URL can create millions of series and overwhelm monitoring storage.</p></div>
@@ -205,15 +204,16 @@
     </section>
 
     <section class="section operations-section" id="operations">
-      <div class="section-heading reveal"><div><div class="eyebrow"><span>07</span> Operations console</div><h2>Observe, disturb, recover.</h2></div><p>A safe, browser-only simulation turns production signals into a practical incident exercise. It never changes your API, database, Docker environment, or cluster.</p></div>
+      <div class="section-heading reveal"><div><div class="eyebrow"><span>07</span> Operations console</div><h2>Observe, disturb, recover.</h2></div><p>Watch live signals, diagnose an incident against the clock, and steer a rolling update. The labs are simulations unless you opt in to a real, self-expiring fault in this API.</p></div>
       <div class="ops-grid reveal">
-        <article class="ops-card status-card"><div class="ops-card-head"><span>LIVE SYSTEM SNAPSHOT</span><button id="refresh-ops">Refresh</button></div><div class="ops-stats"><div><small>API</small><b id="ops-api">Checking…</b></div><div><small>DATABASE</small><b id="ops-db">Checking…</b></div><div><small>OPEN INCIDENTS</small><b id="ops-incidents">—</b></div><div><small>SERVICES</small><b id="ops-services">—</b></div></div><div class="latency-line"><span>REQUEST LATENCY</span><b id="ops-latency">— ms</b><i><em id="latency-bar"></em></i></div><p class="ops-hint">This panel reads the real health, metrics, and incident endpoints exposed by this local app.</p></article>
-        <article class="ops-card"><div class="ops-card-head"><span>INCIDENT LAB</span><span id="scenario-state">NORMAL</span></div><h3 id="scenario-title">Choose a safe failure mode</h3><p id="scenario-copy">Practice the diagnostic order: observe user impact, inspect health signals, identify the failing boundary, then choose the smallest safe recovery.</p><div class="scenario-actions"><button data-scenario="database">Simulate database latency</button><button data-scenario="readiness">Simulate failed readiness</button><button class="ghost-action" id="reset-scenario">Reset lab</button></div><ol class="incident-steps" id="incident-steps"><li>Pick a scenario to begin the guided response.</li><li>No local infrastructure will be modified.</li></ol></article>
-        <article class="ops-card deployment-card"><div class="ops-card-head"><span>DEPLOYMENT LAB</span><span id="rollout-state">IDLE</span></div><h3>Roll out v0.2.0 safely</h3><p>Watch a simulated two-replica rolling update. New pods must become ready before old capacity leaves service.</p><div class="rollout-track"><div><span>v0.1</span><i id="old-pods" class="pod-ready">2 ready</i></div><div><span>v0.2</span><i id="new-pods">0 ready</i></div></div><button id="start-rollout">Start rollout</button><button class="ghost-action" id="rollback">Rollback</button><p class="rollout-note" id="rollout-note">The simulator models Kubernetes rollout status; it does not call kubectl.</p></article>
+        <article class="ops-card status-card"><div class="ops-card-head"><span>LIVE SYSTEM SNAPSHOT</span><button id="refresh-ops" type="button">Refresh</button></div><div class="ops-stats"><div><small>API</small><b id="ops-api">Checking…</b></div><div><small>READINESS</small><b id="ops-db">Checking…</b></div><div><small>OPEN INCIDENTS</small><b id="ops-incidents">—</b></div><div><small>SERVICES</small><b id="ops-services">—</b></div></div><div class="spark-row"><div><span>P95 LATENCY · 10 S</span><b id="spark-latency-value">— ms</b><svg id="spark-latency" viewBox="0 0 120 34" preserveAspectRatio="none" role="img" aria-label="Recent p95 latency"></svg></div><div><span>REQUESTS / S</span><b id="spark-rate-value">—</b><svg id="spark-rate" viewBox="0 0 120 34" preserveAspectRatio="none" role="img" aria-label="Recent request rate"></svg></div></div><button id="send-burst" type="button">Send 50 requests</button><p class="ops-hint">Charts poll <code>/api/ops/summary</code> every two seconds while this section is on screen. Send a burst to make them move.</p></article>
+        <article class="ops-card incident-card"><div class="ops-card-head"><span>INCIDENT LAB</span><span id="scenario-state">NORMAL</span></div><h3 id="scenario-title">Diagnose against the clock</h3><p id="scenario-copy">Pick a failure, then choose each next step. A wrong turn costs two minutes. Aim for the lowest time to recovery.</p><div class="scenario-actions" id="scenario-picker"><button type="button" data-scenario="database">Database latency</button><button type="button" data-scenario="readiness">Failed readiness</button></div><label class="lab-toggle" for="real-chaos"><input type="checkbox" id="real-chaos"> Inject it for real (this API only, expires in 60 s)</label><div class="incident-game" id="incident-game" hidden><div class="game-clock"><span id="game-step">STEP 1 OF 4</span><b id="game-clock">00:00</b></div><p class="game-prompt" id="game-prompt"></p><div class="game-choices" id="game-choices"></div><p class="game-feedback" id="game-feedback" aria-live="polite"></p></div><button class="ghost-action" id="reset-scenario" type="button">Reset lab</button><p class="ops-hint" id="game-best"></p></article>
+        <article class="ops-card deployment-card"><div class="ops-card-head"><span>DEPLOYMENT LAB</span><span id="rollout-state">IDLE</span></div><h3>Roll out a new version safely</h3><p>Two replicas, <code>maxSurge 1</code>, <code>maxUnavailable 0</code>. A new pod must pass readiness before an old one leaves.</p><div class="rollout-stage" aria-live="polite"><div class="rollout-service"><span>Service</span><b id="rollout-traffic">0 req</b></div><div class="pod-grid" id="pod-grid"></div></div><label class="lab-toggle" for="bad-release"><input type="checkbox" id="bad-release"> Ship a release that fails readiness</label><div class="rollout-actions"><button id="start-rollout" type="button">Start rollout</button><button class="ghost-action" id="rollback" type="button">Rollback</button></div><p class="rollout-note" id="rollout-note">This simulates the Deployment controller in the browser; it does not call kubectl.</p></article>
       </div>
-      <article class="event-console reveal"><div class="ops-card-head"><span>LIVE EVENT STREAM</span><b id="event-connection">CONNECTING</b></div><p>Server-Sent Events make API changes visible without polling. Create an incident in the API explorer and watch it arrive here with a request-correlated server event.</p><ol id="event-feed"><li>Waiting for the server event stream…</li></ol></article>
+      <article class="event-console reveal"><div class="ops-card-head"><span>LIVE EVENT STREAM</span><b id="event-connection">CONNECTING</b></div><p>Server-Sent Events make API changes visible without polling. Create an incident in the API playground, or inject a fault in the incident lab, and watch it arrive here.</p><ol id="event-feed"><li>Waiting for the server event stream…</li></ol></article>
       <div class="observability-guide reveal"><div><span>LOGS</span><b>What happened?</b><p>Use a request ID and timestamp to reconstruct one event.</p></div><div><span>METRICS</span><b>How is it behaving?</b><p>Use rates, errors, and duration to see trends and impact.</p></div><div><span>TRACES</span><b>Where did time go?</b><p>Follow one request across boundaries—the request map above is a trace model.</p></div></div>
       <div class="onboarding reveal"><div><span>FIRST-RUN CHECKLIST</span><h3>From clone to confident operator</h3></div><div id="onboarding-list"><label><input type="checkbox" data-onboard="app"> Run the application locally</label><label><input type="checkbox" data-onboard="api"> Send a real API request</label><label><input type="checkbox" data-onboard="incident"> Complete an incident simulation</label><label><input type="checkbox" data-onboard="rollout"> Complete a rollout simulation</label></div><b id="onboarding-progress">0 / 4 complete</b></div>
+      <div class="badge-shelf reveal" aria-label="Badges"><span>BADGES</span><ul id="badge-list"></ul></div>
     </section>
 
     <section class="next-step reveal">
@@ -223,6 +223,9 @@
   </main>
 
   <footer><a class="brand" href="#top"><span class="brand-mark"><i></i><i></i><i></i></span><span>opslab<span class="brand-dot">.</span></span></a><p>Built to understand the machinery.</p><span>Node.js · Docker · Kubernetes · Terraform</span></footer>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/content.js" defer></script>
   <script src="/app.js" defer></script>
+  <script src="/labs.js" defer></script>
 </body>
 </html>

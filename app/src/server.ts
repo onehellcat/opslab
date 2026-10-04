@@ -1,17 +1,26 @@
-import Fastify from 'fastify';
+import Fastify, { LogController, type FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { chaosEnabled, clearChaos, getChaos, setChaos } from './chaos.js';
+import { observeRequest, recentWindow, renderRequestMetrics, requestTotals } from './metrics.js';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    timings: Record<string, number>;
+  }
+}
 
 const app = Fastify({
-  logger: { level: process.env.LOG_LEVEL ?? 'info' },
+  logger: { level: process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'test' ? 'silent' : 'info') },
+  // One structured line per request is written in the onResponse hook below.
+  logController: new LogController({ disableRequestLogging: true }),
 });
 
 const startedAt = Date.now();
-let requestCount = 0;
-let requestDurationTotal = 0;
 const eventClients = new Set<import('node:http').ServerResponse>();
 const eventHistory: Array<{ id: string; type: string; message: string; at: string }> = [];
 
@@ -24,30 +33,74 @@ function publishEvent(type: string, message: string) {
   return event;
 }
 
+// Injected latency only slows the data routes, so health, metrics and the
+// dashboard stay responsive enough to observe the fault.
+const chaosLatencyRoutes = new Set(['/api/services', '/api/incidents', '/api/incidents/:id']);
+
+app.addHook('onRequest', async (request) => {
+  request.timings = {};
+  const { latencyMs } = getChaos();
+  if (latencyMs > 0 && chaosLatencyRoutes.has(request.routeOptions.url ?? '')) {
+    await sleep(latencyMs);
+    request.timings.chaos = latencyMs;
+  }
+});
+
+app.addHook('onSend', async (request, reply, payload) => {
+  const parts = Object.entries(request.timings ?? {}).map(([name, ms]) => `${name};dur=${ms.toFixed(1)}`);
+  parts.push(`total;dur=${reply.elapsedTime.toFixed(1)}`);
+  reply.header('Server-Timing', parts.join(', '));
+  return payload;
+});
+
 app.addHook('onResponse', async (request, reply) => {
-  const durationMs = Math.round(reply.elapsedTime);
-  requestCount += 1;
-  requestDurationTotal += durationMs;
-  request.log.info({ requestId: request.id, method: request.method, route: request.routeOptions.url, statusCode: reply.statusCode, durationMs }, 'request completed');
+  const route = request.routeOptions.url ?? 'unmatched';
+  observeRequest(request.method, route, reply.statusCode, reply.elapsedTime);
+  request.log.info({ requestId: request.id, method: request.method, route, statusCode: reply.statusCode, durationMs: Math.round(reply.elapsedTime) }, 'request completed');
 });
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const publicDirectory = join(currentDirectory, '..', 'public');
 
-const frontendAssets = {
-  html: readFile(join(publicDirectory, 'index.html'), 'utf8'),
-  css: readFile(join(publicDirectory, 'styles.css'), 'utf8'),
-  js: readFile(join(publicDirectory, 'app.js'), 'utf8'),
-  uiKitHtml: readFile(join(publicDirectory, 'ui-kit', 'index.html'), 'utf8'),
-  uiKitCss: readFile(join(publicDirectory, 'ui-kit', 'opslab-ui.css'), 'utf8'),
-  uiKitJs: readFile(join(publicDirectory, 'ui-kit', 'ui-kit.js'), 'utf8'),
+const staticFiles: Record<string, { file: string; type: string }> = {
+  '/': { file: 'index.html', type: 'text/html; charset=utf-8' },
+  '/styles.css': { file: 'styles.css', type: 'text/css; charset=utf-8' },
+  '/labs.css': { file: 'labs.css', type: 'text/css; charset=utf-8' },
+  '/content.js': { file: 'content.js', type: 'application/javascript; charset=utf-8' },
+  '/app.js': { file: 'app.js', type: 'application/javascript; charset=utf-8' },
+  '/labs.js': { file: 'labs.js', type: 'application/javascript; charset=utf-8' },
+  '/ui-kit': { file: 'ui-kit/index.html', type: 'text/html; charset=utf-8' },
+  '/ui-kit/opslab-ui.css': { file: 'ui-kit/opslab-ui.css', type: 'text/css; charset=utf-8' },
+  '/ui-kit/ui-kit.js': { file: 'ui-kit/ui-kit.js', type: 'application/javascript; charset=utf-8' },
 };
+
+// Production serves assets from memory; development re-reads them so edits show on refresh.
+const cacheStaticFiles = process.env.NODE_ENV === 'production';
+const staticCache = new Map<string, Promise<string>>();
+
+function loadStaticFile(file: string) {
+  if (!cacheStaticFiles) {
+    return readFile(join(publicDirectory, file), 'utf8');
+  }
+  if (!staticCache.has(file)) {
+    staticCache.set(file, readFile(join(publicDirectory, file), 'utf8'));
+  }
+  return staticCache.get(file)!;
+}
+
+for (const [url, { file, type }] of Object.entries(staticFiles)) {
+  app.get(url, async (_request, reply) => reply.type(type).send(await loadStaticFile(file)));
+}
+
+const severities = ['low', 'medium', 'high', 'critical'] as const;
+const incidentStatuses = ['open', 'investigating', 'resolved'] as const;
+const serviceStatuses = ['healthy', 'degraded', 'down'] as const;
 
 interface Incident {
   id: string;
   title: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  status: 'open' | 'investigating' | 'resolved';
+  severity: (typeof severities)[number];
+  status: (typeof incidentStatuses)[number];
   createdAt: string;
 }
 
@@ -55,7 +108,19 @@ interface ServiceRecord {
   id: string;
   name: string;
   owner: string;
-  status: 'healthy' | 'degraded' | 'down';
+  status: (typeof serviceStatuses)[number];
+}
+
+function isOneOf<T extends string>(allowed: readonly T[], value: unknown): value is T {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value);
+}
+
+function isText(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= 200;
+}
+
+function isViewer(request: FastifyRequest) {
+  return request.headers['x-opslab-role'] === 'viewer';
 }
 
 const services: ServiceRecord[] = [
@@ -127,6 +192,16 @@ async function ensureDatabaseSchema() {
   }
 }
 
+// Records time spent in the data store so it can be reported in Server-Timing.
+async function measureStore<T>(request: FastifyRequest, work: () => Promise<T>) {
+  const started = performance.now();
+  try {
+    return await work();
+  } finally {
+    request.timings.db = (request.timings.db ?? 0) + performance.now() - started;
+  }
+}
+
 async function loadServices() {
   if (!pool) {
     return services;
@@ -143,6 +218,11 @@ async function loadIncidents() {
 
   const result = await pool.query('SELECT id, title, severity, status, created_at AS "createdAt" FROM incidents ORDER BY created_at DESC');
   return result.rows as Incident[];
+}
+
+async function nextIncidentId() {
+  const highest = (await loadIncidents()).reduce((max, incident) => Math.max(max, Number(incident.id.replace(/\D/g, '')) || 0), 0);
+  return `INC-${String(highest + 1).padStart(3, '0')}`;
 }
 
 async function saveService(service: ServiceRecord) {
@@ -173,43 +253,49 @@ async function saveIncident(incident: Incident) {
   return incident;
 }
 
-async function updateIncidentRecord(id: string, payload: Partial<Incident>) {
+type IncidentChanges = Partial<Pick<Incident, 'title' | 'severity' | 'status'>>;
+
+async function updateIncidentRecord(id: string, changes: IncidentChanges) {
   if (!pool) {
     const incident = incidents.find((item) => item.id === id);
     if (!incident) {
       return null;
     }
-    Object.assign(incident, payload);
+    Object.assign(incident, changes);
     return incident;
   }
 
-  const fields: string[] = [];
-  const values: unknown[] = [];
-  let counter = 1;
-
-  for (const [key, value] of Object.entries(payload)) {
-    if (value !== undefined) {
-      const column = key === 'createdAt' ? 'created_at' : key;
-      fields.push(`${column} = $${counter}`);
-      values.push(value);
-      counter += 1;
-    }
-  }
-
-  if (fields.length === 0) {
-    return (await pool.query('SELECT id, title, severity, status, created_at AS "createdAt" FROM incidents WHERE id = $1', [id])).rows[0] ?? null;
-  }
-
-  values.push(id);
+  // Column names come from this fixed list, never from the request body.
+  const columns = (['title', 'severity', 'status'] as const).filter((column) => changes[column] !== undefined);
+  const assignments = columns.map((column, index) => `${column} = $${index + 1}`);
   await pool.query(
-    `UPDATE incidents SET ${fields.join(', ')} WHERE id = $${counter}`,
-    values,
+    `UPDATE incidents SET ${assignments.join(', ')} WHERE id = $${columns.length + 1}`,
+    [...columns.map((column) => changes[column]), id],
   );
 
   return (await pool.query('SELECT id, title, severity, status, created_at AS "createdAt" FROM incidents WHERE id = $1', [id])).rows[0] ?? null;
 }
 
 app.get('/health/live', async () => ({ status: 'ok' }));
+
+// Readiness answers with 503 when this replica should not receive traffic, which
+// is what makes a Kubernetes readinessProbe remove the pod from Service endpoints.
+app.get('/health/ready', async (_request, reply) => {
+  if (getChaos().failReadiness) {
+    return reply.code(503).send({ status: 'degraded', database: databaseEnabled ? 'unknown' : 'not configured', reason: 'readiness failure injected by the incident lab' });
+  }
+
+  if (!databaseEnabled) {
+    return { status: 'ready', database: 'not configured', store: 'in-memory' };
+  }
+
+  try {
+    await pool!.query('SELECT 1');
+    return { status: 'ready', database: 'connected', store: 'postgres' };
+  } catch (error) {
+    return reply.code(503).send({ status: 'degraded', database: 'unreachable', error: (error as Error).message });
+  }
+});
 
 app.get('/api/whoami', async (request) => {
   const requestedRole = request.headers['x-opslab-role'];
@@ -225,107 +311,81 @@ app.get('/api/events', async (_request, reply) => {
   return reply.hijack();
 });
 
-app.get('/', async (_request, reply) => {
-  return reply.type('text/html; charset=utf-8').send(await frontendAssets.html);
-});
-
-app.get('/styles.css', async (_request, reply) => {
-  return reply.type('text/css; charset=utf-8').send(await frontendAssets.css);
-});
-
-app.get('/app.js', async (_request, reply) => {
-  return reply.type('application/javascript; charset=utf-8').send(await frontendAssets.js);
-});
-
-app.get('/ui-kit', async (_request, reply) => {
-  return reply.type('text/html; charset=utf-8').send(await frontendAssets.uiKitHtml);
-});
-
-app.get('/ui-kit/opslab-ui.css', async (_request, reply) => {
-  return reply.type('text/css; charset=utf-8').send(await frontendAssets.uiKitCss);
-});
-
-app.get('/ui-kit/ui-kit.js', async (_request, reply) => {
-  return reply.type('application/javascript; charset=utf-8').send(await frontendAssets.uiKitJs);
-});
-
-app.get('/health/ready', async () => {
-  if (!databaseEnabled) {
-    return {
-      status: 'degraded',
-      database: 'not configured',
-    };
-  }
-
-  try {
-    await pool!.query('SELECT 1');
-    return {
-      status: 'ready',
-      database: 'connected',
-    };
-  } catch (error) {
-    return {
-      status: 'degraded',
-      database: 'unreachable',
-      error: (error as Error).message,
-    };
-  }
-});
-
-app.get('/api/services', async () => ({ services: await loadServices() }));
+app.get('/api/services', async (request) => ({ services: await measureStore(request, loadServices) }));
 
 app.post('/api/services', async (request, reply) => {
-  if (request.headers['x-opslab-role'] === 'viewer') {
+  if (isViewer(request)) {
     return reply.code(403).send({ error: 'Viewer role cannot change services' });
   }
-  const { name, owner, status } = request.body as Partial<ServiceRecord>;
+  const { name, owner, status } = (request.body ?? {}) as Record<string, unknown>;
 
-  if (!name || !owner || !status) {
-    return reply.code(400).send({ error: 'name, owner and status are required' });
+  if (!isText(name) || !isText(owner)) {
+    return reply.code(400).send({ error: 'name and owner are required text fields (200 characters at most)' });
+  }
+  if (!isOneOf(serviceStatuses, status)) {
+    return reply.code(400).send({ error: `status must be one of: ${serviceStatuses.join(', ')}` });
   }
 
-  const service: ServiceRecord = {
-    id: `svc-${Date.now()}`,
-    name,
-    owner,
-    status,
-  };
-
+  const service = await measureStore(request, () => saveService({ id: `svc-${randomUUID().slice(0, 8)}`, name, owner, status }));
   publishEvent('service', `Service ${service.name} was created`);
-  return reply.code(201).send(await saveService(service));
+  return reply.code(201).send(service);
 });
 
-app.get('/api/incidents', async () => ({ incidents: await loadIncidents() }));
+app.get('/api/incidents', async (request) => ({ incidents: await measureStore(request, loadIncidents) }));
 
 app.post('/api/incidents', async (request, reply) => {
-  if (request.headers['x-opslab-role'] === 'viewer') {
+  if (isViewer(request)) {
     return reply.code(403).send({ error: 'Viewer role cannot create incidents' });
   }
-  const { title, severity, status } = request.body as Partial<Incident>;
+  const { title, severity, status } = (request.body ?? {}) as Record<string, unknown>;
 
-  if (!title || !severity || !status) {
-    return reply.code(400).send({ error: 'title, severity and status are required' });
+  if (!isText(title)) {
+    return reply.code(400).send({ error: 'title is a required text field (200 characters at most)' });
+  }
+  if (!isOneOf(severities, severity)) {
+    return reply.code(400).send({ error: `severity must be one of: ${severities.join(', ')}` });
+  }
+  if (!isOneOf(incidentStatuses, status)) {
+    return reply.code(400).send({ error: `status must be one of: ${incidentStatuses.join(', ')}` });
   }
 
-  const incident: Incident = {
-    id: `INC-${String((await loadIncidents()).length + 1).padStart(3, '0')}`,
-    title,
-    severity,
-    status,
-    createdAt: new Date().toISOString(),
-  };
-
+  const incident = await measureStore(request, async () =>
+    saveIncident({ id: await nextIncidentId(), title, severity, status, createdAt: new Date().toISOString() }));
   publishEvent('incident', `Incident ${incident.id} opened: ${incident.title}`);
-  return reply.code(201).send(await saveIncident(incident));
+  return reply.code(201).send(incident);
 });
 
 app.patch('/api/incidents/:id', async (request, reply) => {
-  if (request.headers['x-opslab-role'] === 'viewer') {
+  if (isViewer(request)) {
     return reply.code(403).send({ error: 'Viewer role cannot update incidents' });
   }
   const { id } = request.params as { id: string };
-  const payload = request.body as Partial<Incident>;
-  const incident = await updateIncidentRecord(id, payload);
+  const { title, severity, status } = (request.body ?? {}) as Record<string, unknown>;
+  const changes: IncidentChanges = {};
+
+  if (title !== undefined) {
+    if (!isText(title)) {
+      return reply.code(400).send({ error: 'title must be text (200 characters at most)' });
+    }
+    changes.title = title;
+  }
+  if (severity !== undefined) {
+    if (!isOneOf(severities, severity)) {
+      return reply.code(400).send({ error: `severity must be one of: ${severities.join(', ')}` });
+    }
+    changes.severity = severity;
+  }
+  if (status !== undefined) {
+    if (!isOneOf(incidentStatuses, status)) {
+      return reply.code(400).send({ error: `status must be one of: ${incidentStatuses.join(', ')}` });
+    }
+    changes.status = status;
+  }
+  if (Object.keys(changes).length === 0) {
+    return reply.code(400).send({ error: 'Provide at least one of: title, severity, status' });
+  }
+
+  const incident = await measureStore(request, () => updateIncidentRecord(id, changes));
 
   if (!incident) {
     return reply.code(404).send({ error: 'Incident not found' });
@@ -335,16 +395,55 @@ app.patch('/api/incidents/:id', async (request, reply) => {
   return incident;
 });
 
+app.get('/api/chaos', async () => ({ enabled: chaosEnabled, ...getChaos() }));
+
+app.post('/api/chaos', async (request, reply) => {
+  if (isViewer(request)) {
+    return reply.code(403).send({ error: 'Viewer role cannot run labs' });
+  }
+  if (!chaosEnabled) {
+    return reply.code(403).send({ error: 'Fault injection is disabled (OPSLAB_CHAOS=off)' });
+  }
+
+  const state = setChaos((request.body ?? {}) as Record<string, unknown>);
+  const faults = [state.latencyMs ? `${state.latencyMs} ms latency on data routes` : '', state.failReadiness ? 'readiness failing' : ''].filter(Boolean);
+  publishEvent('chaos', faults.length ? `Fault injected: ${faults.join(' and ')}` : 'Fault injection cleared');
+  return { enabled: chaosEnabled, ...state };
+});
+
+app.delete('/api/chaos', async (request, reply) => {
+  if (isViewer(request)) {
+    return reply.code(403).send({ error: 'Viewer role cannot run labs' });
+  }
+
+  const wasActive = getChaos().expiresAt !== null;
+  const state = clearChaos();
+  if (wasActive) {
+    publishEvent('chaos', 'Fault injection cleared');
+  }
+  return { enabled: chaosEnabled, ...state };
+});
+
+function isActive(incident: Incident) {
+  return incident.status !== 'resolved';
+}
+
 app.get('/api/ops/summary', async () => {
   const loadedServices = await loadServices();
   const loadedIncidents = await loadIncidents();
+  const totals = requestTotals();
 
   return {
-    http_requests_total: requestCount,
-    http_request_duration_ms: requestCount ? Math.round(requestDurationTotal / requestCount) : 0,
-    active_incidents: loadedIncidents.length,
+    http_requests_total: totals.requests,
+    http_errors_total: totals.errors,
+    http_request_duration_ms: Math.round(totals.meanDurationMs),
+    recent: recentWindow(),
+    active_incidents: loadedIncidents.filter(isActive).length,
+    incidents_total: loadedIncidents.length,
     services_total: loadedServices.length,
     uptime_seconds: Math.round((Date.now() - startedAt) / 1000),
+    store: databaseEnabled ? 'postgres' : 'in-memory',
+    chaos: getChaos(),
     status: 'ok',
   };
 });
@@ -352,17 +451,24 @@ app.get('/api/ops/summary', async () => {
 app.get('/metrics', async (_request, reply) => {
   const loadedServices = await loadServices();
   const loadedIncidents = await loadIncidents();
-  const averageDuration = requestCount ? requestDurationTotal / requestCount : 0;
+  const chaos = getChaos();
+
   return reply.type('text/plain; version=0.0.4').send([
-    '# HELP opslab_http_requests_total Total HTTP requests served by OpsLab',
-    '# TYPE opslab_http_requests_total counter', `opslab_http_requests_total ${requestCount}`,
-    '# HELP opslab_http_request_duration_ms_mean Mean request duration in milliseconds',
-    '# TYPE opslab_http_request_duration_ms_mean gauge', `opslab_http_request_duration_ms_mean ${averageDuration.toFixed(2)}`,
-    '# HELP opslab_active_incidents Current number of incidents',
-    '# TYPE opslab_active_incidents gauge', `opslab_active_incidents ${loadedIncidents.length}`,
+    ...renderRequestMetrics(),
+    '# HELP opslab_active_incidents Incidents that are not resolved',
+    '# TYPE opslab_active_incidents gauge', `opslab_active_incidents ${loadedIncidents.filter(isActive).length}`,
     '# HELP opslab_services_total Current number of services',
     '# TYPE opslab_services_total gauge', `opslab_services_total ${loadedServices.length}`,
+    '# HELP opslab_chaos_active Whether the incident lab is currently injecting a fault',
+    '# TYPE opslab_chaos_active gauge', `opslab_chaos_active ${chaos.expiresAt ? 1 : 0}`,
+    '# HELP opslab_uptime_seconds Seconds since the process started',
+    '# TYPE opslab_uptime_seconds gauge', `opslab_uptime_seconds ${Math.round((Date.now() - startedAt) / 1000)}`,
   ].join('\n') + '\n');
+});
+
+app.addHook('onClose', async () => {
+  eventClients.forEach((client) => client.end());
+  await pool?.end();
 });
 
 const port = Number(process.env.PORT ?? 3000);
@@ -382,4 +488,4 @@ if (process.env.NODE_ENV !== 'test') {
   start();
 }
 
-export { app, services, incidents };
+export { app, ensureDatabaseSchema, services, incidents };
