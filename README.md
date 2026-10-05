@@ -4,6 +4,10 @@
 
 OpsLab is a deliberately small, fully working platform for learning the code-to-deploy lifecycle. It pairs an interactive browser-based study guide with a TypeScript API, PostgreSQL, Docker Compose, Kubernetes manifests, Terraform, and CI.
 
+![The OpsLab guide](docs/screenshot-hero.png)
+
+![Live snapshot, incident lab and a canary rollout](docs/screenshot-operations.png)
+
 ![OpsLab architecture](docs/architecture.svg)
 
 ## Why OpsLab?
@@ -20,12 +24,13 @@ Most DevOps tutorials teach tools in isolation. OpsLab connects the dots: each c
 | Area | What you’ll find |
 | --- | --- |
 | Application | Fastify + TypeScript service with health, service, incident, and metrics endpoints |
-| Data | PostgreSQL 16 with a connection-pooled API |
+| Data | PostgreSQL 16 with a connection-pooled API, in Compose and in Kubernetes |
 | Local runtime | Multi-stage Docker build and Docker Compose |
-| Delivery | GitHub Actions CI: install, type-check, test, and image build |
-| Orchestration | Kubernetes Deployment, Service, namespace, readiness, and liveness probes |
+| Delivery | GitHub Actions CI: type check, API tests, browser tests, image build with vulnerability scan and SBOM, plus Terraform, manifest, Compose, and alert-rule validation |
+| Orchestration | Kubernetes Deployment, PostgreSQL StatefulSet, Secret, Services, probes, resource requests, and a PodDisruptionBudget |
 | Infrastructure as code | Terraform declarations for the Kubernetes resources |
-| Learning UI | Interactive pipeline, architecture, request trace, concept lessons, and API playground |
+| Learning UI | Interactive pipeline, architecture, measured request trace, nine lessons with simulators and checks, API playground, incident lab, deployment lab (rolling, blue-green, canary), kubectl terminal, and incident board |
+| Observability | Optional Prometheus with alert rules, Grafana with a provisioned dashboard, and Jaeger for traces |
 
 ## Quick start
 
@@ -48,6 +53,12 @@ docker compose up --build
 
 Set `OPSLAB_PORT` to expose the UI on a different host port, for example `OPSLAB_PORT=8080 docker compose up --build`.
 
+Add Prometheus (port 9090), Grafana (port 3001) with a ready-made dashboard, and Jaeger (port 16686) for traces:
+
+```bash
+docker compose --profile observe up --build
+```
+
 ## Architecture
 
 ```text
@@ -63,13 +74,16 @@ The project intentionally keeps its delivery environment local. The same boundar
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /health/live` | Is the process alive? |
-| `GET /health/ready` | Can it serve meaningful work, including database access? |
+| `GET /health/ready` | Can it serve meaningful work? Answers `503` when it cannot |
 | `GET /api/services` | List services in the lab |
 | `POST /api/services` | Create a service |
 | `GET /api/incidents` | List incidents |
 | `POST /api/incidents` | Create an incident |
 | `PATCH /api/incidents/:id` | Update an incident |
-| `GET /metrics` | View simple service metrics |
+| `GET /api/ops/summary` | JSON summary with a rolling request-rate and latency window |
+| `GET /api/events` | Server-Sent Events for incident, service, and fault changes |
+| `GET` / `POST` / `DELETE /api/chaos` | Read, inject, or clear a self-expiring fault for the incident lab |
+| `GET /metrics` | Prometheus metrics: labelled request counters and a duration histogram |
 
 ## Repository map
 
@@ -78,6 +92,7 @@ opslab/
 ├── app/                 # Fastify service and interactive learning UI
 ├── kubernetes/          # Native Kubernetes manifests
 ├── terraform/           # Terraform-managed Kubernetes resources
+├── observability/       # Prometheus scrape config and Grafana provisioning
 ├── scripts/             # Local k3d setup and deployment helpers
 ├── .github/workflows/   # Continuous integration
 ├── docker-compose.yml   # Full local runtime
@@ -89,6 +104,9 @@ opslab/
 ```bash
 # App quality checks
 cd app && npm run lint && npm test && npm run build
+
+# Browser tests (first run: npx playwright install chromium)
+cd app && npm run test:e2e
 
 # Local containers
 docker compose up --build

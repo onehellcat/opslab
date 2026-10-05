@@ -1,0 +1,39 @@
+# Alert rules for the OpsLab API. The same four conditions are evaluated inside the
+# app for the UI (see evaluateAlerts in app/src/server.ts), so the two views agree.
+groups:
+  - name: opslab-api
+    rules:
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(opslab_http_request_duration_seconds_bucket[1m]))) > 0.3
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: p95 request latency is above the 300 ms objective
+          description: "p95 is {{ $value | humanizeDuration }}. Trace one slow request to find which hop is waiting."
+
+      - alert: HighErrorRate
+        expr: sum(rate(opslab_http_requests_total{status=~"5.."}[1m])) / sum(rate(opslab_http_requests_total[1m])) > 0.05
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 5% of requests are failing
+          description: "{{ $value | humanizePercentage }} of requests returned a 5xx status. Check what was released most recently."
+
+      - alert: ErrorBudgetBurn
+        expr: opslab_slo_error_budget_remaining < 0.5
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: More than half of the error budget is spent
+          description: "{{ $value | humanizePercentage }} of the budget is left in the rolling window."
+
+      - alert: FaultInjected
+        expr: opslab_chaos_active == 1
+        labels:
+          severity: info
+        annotations:
+          summary: The incident lab is injecting a fault
+          description: This is expected during a lab and clears by itself within two minutes.

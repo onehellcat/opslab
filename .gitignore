@@ -6,3 +6,15 @@ coverage/
 .vite/
 .DS_Store
 *.log
+
+# Terraform working files
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Local Claude Code settings
+.claude/
+
+# Playwright output
+app/test-results/
+app/playwright-report/
