@@ -121,7 +121,7 @@ jobs:
 
       # Fixable critical vulnerabilities fail the build; high ones are listed for review.
       - name: Scan image
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: opslab-api:ci
           scanners: vuln
@@ -130,7 +130,7 @@ jobs:
           exit-code: '1'
 
       - name: List high-severity findings
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: opslab-api:ci
           scanners: vuln

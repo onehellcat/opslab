@@ -294,6 +294,6 @@ const stageLogs = {
   },
   image: {
     lines: ['→ [builder] npm ci && npm run build', '→ [runner] copying dist/ and public/', '→ trivy · scanning image for known vulnerabilities', '✓ Immutable artifact packaged'],
-    yaml: ['- name: Build image', '  run: docker build -t opslab-api:ci app', '- name: Scan image', '  uses: aquasecurity/trivy-action@v0.33.1', '- name: Push image (main only)', '  run: docker push ghcr.io/…/opslab-api'],
+    yaml: ['- name: Build image', '  run: docker build -t opslab-api:ci app', '- name: Scan image', '  uses: aquasecurity/trivy-action@v0.36.0', '- name: Push image (main only)', '  run: docker push ghcr.io/…/opslab-api'],
   },
 };
