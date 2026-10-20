@@ -141,12 +141,15 @@ function renderHpa(load) {
     return `<div class="${tone}"><i style="height:${Math.min(utilisation, 100)}%"></i><span>${Math.min(utilisation, 999)}%</span></div>`;
   }).join('');
 
-  const formula = `ceil(${hpa.replicas} × ${utilisation}% ÷ ${hpa.target}%) = ${Math.ceil((hpa.replicas * utilisation) / hpa.target)}`;
+  const wanted = Math.ceil((hpa.replicas * utilisation) / hpa.target);
+  const formula = `ceil(${hpa.replicas} × ${utilisation}% ÷ ${hpa.target}%) = ${wanted}`;
   if (desired === hpa.replicas) {
     $('#hpa-result').textContent =
-      utilisation > 100 && hpa.replicas === hpa.max
-        ? `At the maximum of ${hpa.max} replicas and still at ${utilisation}% CPU: requests are being dropped. Scaling out has a ceiling.`
-        : `${hpa.replicas} replicas at ${utilisation}% CPU. ${formula}, so nothing changes.`;
+      wanted > hpa.max && hpa.replicas === hpa.max
+        ? `${formula}, but the maximum is ${hpa.max} replicas.${utilisation > 100 ? ' Pods are past 100% CPU, so requests are being dropped.' : ''} Scaling out has a ceiling.`
+        : wanted < hpa.min && hpa.replicas === hpa.min
+          ? `${formula}, but the minimum is ${hpa.min} replicas, kept for redundancy.`
+          : `${hpa.replicas} replicas at ${utilisation}% CPU. ${formula}, so nothing changes.`;
     return;
   }
 
