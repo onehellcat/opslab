@@ -1,0 +1,84 @@
+# PostgreSQL for the lab: one replica with a persistent volume, reached through
+# the "postgres" Service. Both API pods share it, so they return the same data.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: opslab-db
+  namespace: opslab
+type: Opaque
+# stringData is plain text for readability; Kubernetes stores it base64-encoded.
+# This is a local teaching credential. Never commit a real one.
+stringData:
+  password: development
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: opslab
+spec:
+  # Headless: DNS resolves straight to the pod, which is what a StatefulSet expects.
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: opslab
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: opslab
+            - name: POSTGRES_USER
+              value: opslab
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: opslab-db
+                  key: password
+            # Keep the data in a subdirectory so the volume's lost+found does not confuse initdb.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "opslab", "-d", "opslab"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

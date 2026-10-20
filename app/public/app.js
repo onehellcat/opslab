@@ -1,47 +1,431 @@
-const stages={
- checkout:{k:'STAGE 01 · SOURCE',t:'Bring the exact code into the runner',b:'GitHub Actions creates a fresh, temporary Ubuntu virtual machine for every job. The checkout action downloads the selected Git commit into that machine so later commands can read the same files you reviewed.',w:'A clean runner prevents files from an older build from changing the result. Pinning the work to one commit also makes a failed run reproducible: you can check out the same SHA locally and investigate identical source.',v:'Open .github/workflows/ci.yml and find actions/checkout@v4.',c:'actions/checkout@v4',o:'→ Repository synced at 8f31ca',s:'✓ Working tree ready',f:[['Runner','ubuntu-latest'],['Trigger','push / pull_request'],['Input','Git commit']]},
- install:{k:'STAGE 02 · DEPENDENCIES',t:'Reproduce the dependency tree',b:'npm ci deletes any existing dependency tree and installs the exact package versions recorded in package-lock.json. It stops if package.json and the lockfile disagree instead of silently rewriting the lockfile.',w:'The lockfile turns a broad request such as “Fastify 5 compatible” into one repeatable dependency graph. CI and a developer laptop therefore test the same transitive packages, reducing “works on my machine” failures.',v:'Compare package.json with package-lock.json, then run npm ci in app/.',c:'npm ci',o:'→ added 117 packages in 2s',s:'✓ Lockfile reproduced exactly',f:[['Runtime','Node.js 22'],['Cache','npm lock hash'],['Input','package-lock.json']]},
- verify:{k:'STAGE 03 · QUALITY GATE',t:'Prove the change is safe to package',b:'TypeScript first checks every typed boundary without emitting JavaScript. Vitest then creates the Fastify application in memory and injects HTTP requests into it. CI supplies PostgreSQL 16 so database behavior can be exercised without a separately managed server.',w:'These checks fail before an image is published. Type checking catches mismatched assumptions at build time, while request-level tests prove routes, status codes, headers, and response bodies behave together.',v:'Run npm run lint and npm test from app/; inspect app/tests/server.test.ts.',c:'npm run lint && npm test',o:'→ 5 tests passed · 0 type errors',s:'✓ Quality gate passed',f:[['Database','Postgres 16 Alpine'],['Typecheck','tsc --noEmit'],['Tests','Vitest + inject']]},
- image:{k:'STAGE 04 · ARTIFACT',t:'Turn source into a portable image',b:'The Dockerfile uses one stage to compile TypeScript and a second stage for runtime files only. The final image contains the compiled server, public assets, and production dependencies, then starts the process as the unprivileged node user.',w:'The image becomes the immutable delivery unit used in every environment. A smaller runtime image downloads faster, exposes fewer unnecessary tools, and limits damage if the application process is compromised.',v:'Run docker history opslab-api:test after building to inspect its layers.',c:'docker build -t opslab-api:test .',o:'→ exporting layers · image ready',s:'✓ Immutable artifact packaged',f:[['Base','node:22-alpine'],['User','node (non-root)'],['Port','TCP 3000']]}
+'use strict';
+// Guide behaviour: pipeline, architecture, request trace, lessons and API playground.
+// Teaching copy lives in content.js; the operations labs live in labs.js.
+
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const pace = (ms) => wait(reducedMotion ? 0 : ms);
+
+function escapeHtml(value) {
+  return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function readStore(key, fallback) {
+  try {
+    return JSON.parse(localStorage.getItem(key)) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStore(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Private windows may block storage; progress is then kept for this page view only.
+  }
+}
+
+async function copyText(text, label, original) {
+  try {
+    await navigator.clipboard.writeText(text);
+    label.textContent = 'Copied ✓';
+  } catch {
+    label.textContent = 'Copy blocked';
+  }
+  setTimeout(() => (label.textContent = original), 1600);
+}
+
+function factGrid(className, facts) {
+  return `<div class="${className}">${facts.map(([name, value]) => `<div><span>${name}</span><b>${value}</b></div>`).join('')}</div>`;
+}
+
+function explanation(why, verify) {
+  return `<div class="explanation"><span>WHY IT MATTERS</span><p>${why}</p><div class="verify-step"><span>VERIFY IN THE PROJECT</span><p>${verify}</p></div></div>`;
+}
+
+/* ---------- Pipeline ---------- */
+
+const stageDetail = $('#stage-detail');
+const stageButtons = $$('.stage');
+const runButton = $('#run-pipeline');
+const breakBuild = $('#break-build');
+const trackProgress = $('.track-progress');
+
+function logLineClass(line) {
+  if (line.startsWith('✓')) return 'success';
+  if (line.startsWith('✗') || line.startsWith('   ')) return 'failure';
+  return 'muted';
+}
+
+// Renders a stage and returns once its terminal output has finished appearing.
+async function showStage(key, { stream = false, fail = false } = {}) {
+  const stage = stages[key];
+  const log = stageLogs[key];
+  const lines = fail && log.fail ? log.fail : log.lines;
+
+  stageButtons.forEach((button) => button.classList.toggle('active', button.dataset.stage === key));
+  stageDetail.innerHTML =
+    `<div><span class="detail-kicker">${stage.kicker}</span><h3>${stage.title}</h3>` +
+    `<span class="explanation-label">WHAT HAPPENS</span><p>${stage.body}</p>` +
+    explanation(stage.why, stage.verify) +
+    factGrid('stage-facts', stage.facts) +
+    '</div><div class="terminal"><div class="terminal-head"><span></span><span></span><span></span><b>.github/workflows/ci.yml</b></div>' +
+    `<pre><code><span class="prompt">$</span> ${escapeHtml(stage.command)}\n</code></pre>` +
+    `<div class="terminal-yaml"><b>WORKFLOW THAT RUNS THIS</b><pre>${log.yaml.map(escapeHtml).join('\n')}</pre></div></div>`;
+
+  const code = $('code', stageDetail);
+  for (const line of lines) {
+    if (stream) await pace(260);
+    const row = document.createElement('span');
+    row.className = logLineClass(line);
+    row.textContent = line + '\n';
+    code.append(row);
+  }
+}
+
+async function runPipeline() {
+  const shouldFail = breakBuild.checked;
+  runButton.disabled = true;
+  runButton.innerHTML = '<span>◌</span> Running…';
+  stageButtons.forEach((button) => button.classList.remove('done', 'running', 'failed', 'skipped'));
+  trackProgress.style.width = '0';
+
+  let failedAt = -1;
+  for (const [index, button] of stageButtons.entries()) {
+    const fails = shouldFail && button.dataset.stage === 'verify';
+    button.classList.add('running');
+    await showStage(button.dataset.stage, { stream: true, fail: fails });
+    await pace(300);
+    button.classList.remove('running');
+    if (fails) {
+      button.classList.add('failed');
+      failedAt = index;
+      break;
+    }
+    button.classList.add('done');
+    trackProgress.style.width = (index / (stageButtons.length - 1)) * 100 + '%';
+  }
+
+  if (failedAt >= 0) {
+    stageButtons.slice(failedAt + 1).forEach((button) => button.classList.add('skipped'));
+    earnBadge('breaker');
+  }
+  $('#pipeline-result').textContent = failedAt >= 0
+    ? 'Failed at Verify: no image was built, so nothing broken can be deployed.'
+    : 'All four stages passed. The image is ready to deploy.';
+  runButton.disabled = false;
+  runButton.innerHTML = '<span>↻</span> Run again';
+}
+
+stageButtons.forEach((button) => button.addEventListener('click', () => showStage(button.dataset.stage)));
+runButton.addEventListener('click', runPipeline);
+showStage('checkout');
+
+/* ---------- Architecture ---------- */
+
+function inspectNode(view, key) {
+  const [title, body, facts, source, why, verify] = view.nodes[key];
+  $('#concept-panel').innerHTML =
+    `<span>SELECTED COMPONENT</span><h3>${title}</h3><span class="explanation-label">WHAT HAPPENS</span><p>${body}</p>` +
+    explanation(why, verify) +
+    factGrid('tech-grid', facts) +
+    `<p class="source-ref">SOURCE · ${source}</p>`;
+}
+
+function renderView(key) {
+  const view = views[key];
+  const diagram = $('#diagram');
+  diagram.innerHTML = view.html;
+  inspectNode(view, view.first);
+
+  $$('.node', diagram).forEach((node) => {
+    node.tabIndex = 0;
+    node.setAttribute('role', 'button');
+    const select = () => {
+      $$('.node', diagram).forEach((other) => other.classList.remove('active'));
+      node.classList.add('active');
+      inspectNode(view, node.dataset.node);
+    };
+    node.addEventListener('click', select);
+    node.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        select();
+      }
+    });
+  });
+}
+
+$$('.tab').forEach((tab) =>
+  tab.addEventListener('click', () => {
+    $$('.tab').forEach((other) => other.classList.remove('active'));
+    tab.classList.add('active');
+    renderView(tab.dataset.view);
+  }),
+);
+renderView('compose');
+
+/* ---------- Request trace ---------- */
+
+const traceDetail = $('#trace-detail');
+const traceHops = $$('.trace-hop');
+const traceButton = $('#run-trace');
+const traceProgress = $('#trace-progress');
+
+function showHop(key) {
+  const hop = hops[key];
+  traceHops.forEach((button) => button.classList.toggle('active', button.dataset.hop === key));
+  traceDetail.innerHTML =
+    `<div><span class="detail-kicker">${hop.kicker}</span><h3>${hop.title}</h3>` +
+    `<span class="explanation-label">WHAT HAPPENS</span><p>${hop.body}</p>${explanation(hop.why, hop.verify)}</div>` +
+    factGrid('protocol-stack', hop.facts);
+}
+
+// "db;dur=1.2, total;dur=3.4" → { db: 1.2, total: 3.4 }
+function parseServerTiming(header) {
+  const timings = {};
+  (header || '').split(',').forEach((part) => {
+    const match = part.trim().match(/^([\w-]+);dur=([\d.]+)/);
+    if (match) timings[match[1]] = Number(match[2]);
+  });
+  return timings;
+}
+
+function renderWaterfall(result) {
+  const server = result.timing;
+  const total = Math.max(result.ms, server.total ?? 0, 1);
+  const serverTotal = Math.min(server.total ?? 0, total);
+  const network = Math.max(total - serverTotal, 0);
+  const chaos = server.chaos ?? 0;
+  const store = Math.min(server.db ?? 0, serverTotal);
+  const handler = Math.max(serverTotal - chaos - store, 0);
+
+  const spans = [
+    ['Network + port publish', network / 2, ''],
+    ['Injected latency (lab)', chaos, 'warn'],
+    ['Fastify handler', handler, ''],
+    ['Store query', store, 'warn'],
+    ['Response to browser', network / 2, ''],
+  ].filter(([name, ms]) => ms > 0.05 || name === 'Store query');
+
+  let offset = 0;
+  const rows = spans.map(([name, ms, tone]) => {
+    const row = `<div class="wf-row"><b>${name}</b><div class="wf-track"><i class="${tone}" style="left:${(offset / total) * 100}%;width:${Math.max((ms / total) * 100, 0.8)}%"></i></div><small>${ms.toFixed(1)} ms</small></div>`;
+    offset += ms;
+    return row;
+  });
+
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((fraction) => `<span>${(total * fraction).toFixed(total < 20 ? 1 : 0)} ms</span>`).join('');
+  $('#waterfall').innerHTML =
+    `<div class="wf-head"><span>MEASURED · ${escapeHtml(result.statusText)}</span><div class="wf-ticks">${ticks}</div><span>${total.toFixed(1)} ms</span></div>${rows.join('')}`;
+}
+
+async function runTrace() {
+  traceButton.disabled = true;
+  traceButton.innerHTML = '<span>◌</span> Tracing…';
+  traceHops.forEach((hop) => hop.classList.remove('done', 'tracing'));
+  traceProgress.className = 'moving';
+  traceProgress.style.width = '0';
+
+  for (const [index, hop] of traceHops.entries()) {
+    hop.classList.add('tracing');
+    showHop(hop.dataset.hop);
+    traceProgress.style.width = (index / (traceHops.length - 1)) * 100 + '%';
+    await pace(550);
+    hop.classList.remove('tracing');
+    hop.classList.add('done');
+  }
+
+  // The response travels back along the same path.
+  traceProgress.className = 'moving returning';
+  traceProgress.style.width = '0';
+  await pace(650);
+  traceProgress.className = '';
+
+  const result = await sendRequest('/api/services', { method: 'GET' });
+  if (result) {
+    renderWaterfall(result);
+    const traceUi = window.opslabTracing?.ui;
+    $('#trace-id').textContent = result.traceId ? `TRACE ${result.traceId.slice(0, 8)}` : 'TRACE · LOCAL';
+    $('#trace-link').hidden = !(result.traceId && traceUi);
+    if (result.traceId && traceUi) $('#trace-link').href = `${traceUi}/trace/${result.traceId}`;
+  }
+  traceButton.disabled = false;
+  traceButton.innerHTML = '<span>↻</span> Trace again';
+}
+
+traceHops.forEach((hop) => hop.addEventListener('click', () => showHop(hop.dataset.hop)));
+traceButton.addEventListener('click', runTrace);
+showHop('client');
+
+/* ---------- API playground ---------- */
+
+const endpointSelect = $('#endpoint');
+const methodSelect = $('#method');
+const requestJson = $('#request-json');
+const roleSelect = $('#operator-role');
+
+const requestExamples = {
+  '/api/chaos': '{"latencyMs":400,"errorRate":0,"failReadiness":false,"durationSeconds":30}',
+  '/api/services': '{"name":"Catalog API","owner":"Platform","status":"healthy"}',
+  '/api/incidents': '{"title":"Example incident","severity":"medium","status":"open"}',
 };
-const detail=document.querySelector('#stage-detail');
-function showStage(key){const x=stages[key];document.querySelectorAll('.stage').forEach(e=>e.classList.toggle('active',e.dataset.stage===key));detail.innerHTML='<div><span class="detail-kicker">'+x.k+'</span><h3>'+x.t+'</h3><span class="explanation-label">WHAT HAPPENS</span><p>'+x.b+'</p><div class="explanation"><span>WHY IT MATTERS</span><p>'+x.w+'</p><div class="verify-step"><span>VERIFY IN THE PROJECT</span><p>'+x.v+'</p></div></div><div class="stage-facts">'+x.f.map(f=>'<div><span>'+f[0]+'</span><b>'+f[1]+'</b></div>').join('')+'</div></div><div class="terminal"><div class="terminal-head"><span></span><span></span><span></span><b>.github/workflows/ci.yml</b></div><pre><code><span class="prompt">$</span> '+x.c+'\n<span class="muted">'+x.o+'</span>\n<span class="success">'+x.s+'</span></code></pre></div>'}
-document.querySelectorAll('.stage').forEach(e=>e.addEventListener('click',()=>showStage(e.dataset.stage)));
-const run=document.querySelector('#run-pipeline');
-run.addEventListener('click',async()=>{run.disabled=true;run.innerHTML='<span>◌</span> Running…';const nodes=[...document.querySelectorAll('.stage')];nodes.forEach(n=>n.classList.remove('done','running'));document.querySelector('.track-progress').style.width='0';for(let i=0;i<nodes.length;i++){nodes[i].classList.add('running');showStage(nodes[i].dataset.stage);await new Promise(r=>setTimeout(r,700));nodes[i].classList.remove('running');nodes[i].classList.add('done');document.querySelector('.track-progress').style.width=(i/3*100)+'%'}run.disabled=false;run.innerHTML='<span>↻</span> Run again'});
 
-const views={
- compose:{h:'<div class="flow"><div class="node active" data-node="browser"><span class="node-icon">◎</span><b>Your browser</b><small>localhost:3000</small></div><span class="arrow">→</span><div class="stack"><div class="node" data-node="api"><span class="node-icon">⬡</span><b>Fastify API</b><small>api container :3000</small></div><div class="node" data-node="db"><span class="node-icon">▱</span><b>PostgreSQL 16</b><small>postgres :5432</small></div></div></div>',first:'browser',nodes:{browser:['Host → container NAT','The browser connects to localhost:3000 on your host. Docker owns that listening port and forwards each TCP connection to port 3000 in the api container; the browser does not need to know the container address.',[['Address','localhost:3000'],['Protocol','HTTP/1.1'],['Mapping','3000:3000']],'docker-compose.yml · ports','Port publishing creates the explicit bridge from your host into an otherwise isolated container network.','Run docker compose ps and compare the PORTS column with the Compose file.'],api:['Fastify application','The Node.js process listens on 0.0.0.0, meaning every network interface inside the container rather than loopback only. Compose injects DATABASE_HOST=postgres, so the app can locate the database by service name.',[['Image','opslab-api:local'],['Process','node dist/server.js'],['DB host','postgres']],'app/src/server.ts','Binding and DNS solve different reachability problems: 0.0.0.0 accepts traffic, while the service name tells the API where to send database traffic.','Inspect app.listen() in server.ts and environment in docker-compose.yml.'],db:['Persistent database','Compose DNS resolves postgres to the current database container address. PostgreSQL listens on 5432, while the named volume mounts its data directory outside the disposable container layer.',[['Image','postgres:16-alpine'],['Port','5432/tcp'],['Volume','postgres_data']],'docker-compose.yml · postgres','Containers can be replaced at any time. The named volume preserves table data independently from that container lifecycle.','Run docker volume ls, then inspect the postgres service declaration.']}},
- kubernetes:{h:'<div class="flow"><div class="node" data-node="service"><span class="node-icon">⇄</span><b>Service</b><small>ClusterIP :80</small></div><span class="arrow">→</span><div class="cluster"><div class="node active" data-node="pod"><span class="node-icon">⬡</span><b>Pod 01</b><small>ready · :3000</small></div><div class="node" data-node="pod"><span class="node-icon">⬡</span><b>Pod 02</b><small>ready · :3000</small></div></div></div>',first:'pod',nodes:{service:['Stable virtual endpoint','The Service receives traffic on a stable cluster IP and port 80. Its selector continuously finds ready pods labeled app=opslab-api, then forwards connections to port 3000 on one of those pods.',[['Type','ClusterIP'],['Selector','app=opslab-api'],['Port','80 → 3000']],'kubernetes/service.yaml','Pod IP addresses change during rollout and recovery. The Service gives callers one durable destination while Kubernetes updates the backing endpoint list.','Run kubectl get svc,endpoints -n opslab and compare their selectors.'],pod:['Deployment replica','The Deployment asks Kubernetes to keep two identical pod replicas running. Readiness decides whether a pod receives Service traffic; liveness decides whether the kubelet should restart its container.',[['Replicas','2 desired'],['Ready probe','5s → every 10s'],['Live probe','10s → every 15s']],'kubernetes/deployment.yaml','Separating traffic eligibility from restart policy prevents a warming or dependency-blocked app from receiving requests without creating an unnecessary restart loop.','Run kubectl describe pod -n opslab and inspect Conditions and Events.']}},
- terraform:{h:'<div class="flow"><div class="node active" data-node="config"><span class="node-icon">⌁</span><b>main.tf</b><small>desired state</small></div><span class="arrow">→</span><div class="node" data-node="provider"><span class="node-icon">↻</span><b>K8s provider</b><small>reconcile</small></div><span class="arrow">→</span><div class="node" data-node="state"><span class="node-icon">▦</span><b>4 resources</b><small>real cluster</small></div></div>',first:'config',nodes:{config:['Declarative configuration','HCL describes the end state rather than a list of shell commands. References between resources form a dependency graph, so Terraform knows the namespace and ConfigMap must exist before the Deployment.',[['Language','HCL'],['Resources','4'],['Terraform','≥ 1.6.0']],'terraform/main.tf','A declarative graph can be planned, reviewed, repeated, and applied consistently instead of relying on an operator to remember an imperative sequence.','Run terraform plan from terraform/ and read each proposed action.'],provider:['Kubernetes provider','The provider is Terraform’s adapter for the Kubernetes API. It reads kubeconfig credentials, translates HCL resources into API requests, and reads the resulting objects back for comparison.',[['Source','hashicorp/kubernetes'],['Version','~> 2.31'],['Auth','kubeconfig']],'terraform/providers.tf','Terraform core understands graphs and state; the provider supplies Kubernetes-specific schemas and operations. Pinning its version avoids surprise behavior changes.','Run terraform providers to see which plugin satisfies each resource.'],state:['Managed resource graph','State maps each Terraform address to a real Kubernetes object and remembers attributes returned by the API. During planning, Terraform compares configuration, state, and the live cluster.',[['Namespace','opslab'],['Replicas','2'],['Service','ClusterIP']],'terraform/main.tf','Without that mapping, Terraform could not reliably decide whether to create, update, replace, or leave an existing object alone. State may contain sensitive data and should be protected.','After apply, run terraform state list; do not edit the state file by hand.']}}
-};
-function inspectNode(v,key){const n=v.nodes[key];document.querySelector('#concept-panel').innerHTML='<span>SELECTED COMPONENT</span><h3>'+n[0]+'</h3><span class="explanation-label">WHAT HAPPENS</span><p>'+n[1]+'</p><div class="explanation"><span>WHY IT MATTERS</span><p>'+n[4]+'</p><div class="verify-step"><span>VERIFY IN THE PROJECT</span><p>'+n[5]+'</p></div></div><div class="tech-grid">'+n[2].map(x=>'<div><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('')+'</div><p class="source-ref">SOURCE · '+n[3]+'</p>'}
-function renderView(key){const v=views[key];document.querySelector('#diagram').innerHTML=v.h;inspectNode(v,v.first);document.querySelectorAll('.node').forEach(n=>n.addEventListener('click',()=>{document.querySelectorAll('.node').forEach(x=>x.classList.remove('active'));n.classList.add('active');inspectNode(v,n.dataset.node)}))}
-document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderView(t.dataset.view)}));showStage('checkout');renderView('compose');
+function colourJson(data) {
+  const token = /("(?:\\.|[^"\\])*")(\s*:)?|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[^"\d-]+|./g;
+  return JSON.stringify(data, null, 2).replace(token, (match, string, colon) => {
+    if (string) return `<span class="${colon ? 'json-key' : 'json-string'}">${escapeHtml(string)}</span>${colon || ''}`;
+    if (/^-?\d/.test(match)) return `<span class="json-number">${match}</span>`;
+    return escapeHtml(match);
+  });
+}
 
-const hops={
- client:{k:'HOP 01 · CLIENT',t:'The browser creates an HTTP request',b:'fetch() builds a GET request to /api/services on the same origin that served this page. The method and path identify the operation; the Accept header says the browser can process JSON. A GET has no request body here.',w:'HTTP turns a UI action into a language-independent message. Because this is same-origin traffic, the browser can reuse the current host and port and no cross-origin permission check is needed.',v:'Open browser DevTools → Network, send the request, and inspect Headers.',m:[['Method','GET'],['Path','/api/services'],['Accept','application/json'],['Body','none']]},
- nat:{k:'HOP 02 · CONTAINER BOUNDARY',t:'Docker publishes the container port',b:'The TCP connection first reaches port 3000 on the host. Docker’s port-publishing rule forwards it to port 3000 inside the api container, where Fastify listens on 0.0.0.0.',w:'A container has its own network namespace, so listening inside it does not automatically expose the process to your laptop. The explicit 3000:3000 mapping creates that controlled entry point.',v:'Run docker compose ps; the PORTS column shows host → container mapping.',m:[['Host port','3000'],['Container port','3000'],['Bind address','0.0.0.0'],['Network','opslab_default']]},
- fastify:{k:'HOP 03 · APPLICATION',t:'Fastify matches and executes the handler',b:'Fastify compares the request method and path with its registered routes, selects GET /api/services, and awaits loadServices(). DATABASE_HOST is present under Compose, so the function chooses the PostgreSQL-backed branch.',w:'Routing keeps transport details separate from data access. Awaiting the promise lets Node.js work on other connections while the database is responding instead of blocking the event loop.',v:'Find app.get(\'/api/services\') and loadServices() in app/src/server.ts.',m:[['Framework','Fastify 5'],['Handler','loadServices()'],['Mode','async / await'],['Branch','pool enabled']]},
- pool:{k:'HOP 04 · CONNECTION MANAGEMENT',t:'The pg pool lends a connection',b:'The pg Pool maintains reusable PostgreSQL connections. For this query it checks out an available connection, sends the SQL over TCP, waits for the result, and returns the connection to the pool.',w:'Creating a database connection requires authentication and a network handshake. Reuse removes that setup from most requests and limits concurrency so a traffic spike does not open unlimited connections.',v:'Inspect new Pool(...) and pool.query(...) in app/src/server.ts.',m:[['Driver','pg 8'],['Host','postgres'],['Port','5432'],['Database','opslab']]},
- database:{k:'HOP 05 · PERSISTENCE',t:'PostgreSQL executes and returns rows',b:'PostgreSQL parses SELECT * FROM services ORDER BY name, reads matching table rows, sorts them by name, and returns a structured result. The handler places result.rows under services; Fastify serializes that object as JSON and sends the HTTP response back.',w:'The database owns durable state and query semantics, while the API owns the public response shape. That boundary lets the storage schema evolve without forcing every client to speak SQL.',v:'Send GET /api/services and match its JSON fields to the services table schema.',m:[['Query','SELECT *'],['Table','services'],['Order','name ASC'],['Result','JSON array']]}
-};
-const traceDetail=document.querySelector('#trace-detail');
-function showHop(key){const h=hops[key];document.querySelectorAll('.trace-hop').forEach(x=>x.classList.toggle('active',x.dataset.hop===key));traceDetail.innerHTML='<div><span class="detail-kicker">'+h.k+'</span><h3>'+h.t+'</h3><span class="explanation-label">WHAT HAPPENS</span><p>'+h.b+'</p><div class="explanation"><span>WHY IT MATTERS</span><p>'+h.w+'</p><div class="verify-step"><span>VERIFY IN THE PROJECT</span><p>'+h.v+'</p></div></div></div><div class="protocol-stack">'+h.m.map(x=>'<div><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('')+'</div>'}
-document.querySelectorAll('.trace-hop').forEach(h=>h.addEventListener('click',()=>showHop(h.dataset.hop)));showHop('client');
-const traceButton=document.querySelector('#run-trace');
-traceButton.addEventListener('click',async()=>{traceButton.disabled=true;traceButton.innerHTML='<span>◌</span> Tracing…';const nodes=[...document.querySelectorAll('.trace-hop')];nodes.forEach(n=>n.classList.remove('done','tracing'));document.querySelector('#trace-progress').style.width='0';for(let i=0;i<nodes.length;i++){nodes[i].classList.add('tracing');showHop(nodes[i].dataset.hop);await new Promise(r=>setTimeout(r,550));nodes[i].classList.remove('tracing');nodes[i].classList.add('done');document.querySelector('#trace-progress').style.width=(i/4*100)+'%'}await sendRequest('/api/services');traceButton.disabled=false;traceButton.innerHTML='<span>↻</span> Trace again'});
+// Sends a request and shows it in the response panel. Returns timing details, or null when offline.
+async function sendRequest(path = endpointSelect.value, { method = methodSelect.value } = {}) {
+  const body = $('#response-body');
+  const status = $('#response-status');
+  const time = $('#response-time');
+  body.textContent = 'Sending request…';
+  status.textContent = 'WAIT';
+  const started = performance.now();
 
-const notes={'/health/live':'Liveness answers one narrow question: can this Node.js process still answer HTTP? Kubernetes restarts the container after repeated failures. It intentionally does not query PostgreSQL, because a database outage should not cause every API replica to restart at once.','/health/ready':'Readiness answers whether this replica can safely receive traffic. OpsLab checks its required dependency and reports degraded when PostgreSQL is unavailable. Kubernetes can then remove the pod from Service endpoints without killing it, allowing recovery in place.','/api/services':'This read route calls loadServices(). With DATABASE_HOST configured it executes SELECT * FROM services ORDER BY name through the shared pg Pool; without that variable it uses the in-memory records so lightweight local development still works.','/api/incidents':'This route returns operational incidents. Severity describes customer or system impact; status describes workflow state. Keeping those concepts separate allows a critical incident to move from open to investigating to resolved without rewriting its historical impact.','/metrics':'Metrics expose numeric observations that a monitoring system can scrape repeatedly. Counters describe accumulated work, duration values reveal latency, and gauges such as active_incidents describe current state. In production these samples become charts and alert conditions.'};
-const endpoint=document.querySelector('#endpoint');endpoint.addEventListener('change',()=>document.querySelector('#endpoint-note').textContent=notes[endpoint.value]);
-function colored(data){return JSON.stringify(data,null,2).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"([^"\\]*(\\.[^"\\]*)*)"(?=\s*:)/g,'<span class="json-key">"$1"</span>').replace(/:\s*"([^"\\]*(\\.[^"\\]*)*)"/g,': <span class="json-string">"$1"</span>').replace(/:\s*(\d+)/g,': <span class="json-number">$1</span>')}
-async function sendRequest(path){path=path||endpoint.value;const body=document.querySelector('#response-body'),status=document.querySelector('#response-status'),time=document.querySelector('#response-time');body.textContent='Sending request…';status.textContent='WAIT';const start=performance.now();try{const response=await fetch(path),data=await response.json();time.textContent=Math.round(performance.now()-start)+' ms';status.textContent=response.status+' '+(response.ok?'OK':'ERROR');body.innerHTML=colored(data)}catch(error){status.textContent='OFFLINE';body.textContent=error.message}}
-document.querySelector('#send-request').addEventListener('click',()=>sendRequest());
-document.querySelector('#quick-health').addEventListener('click',async()=>{const toast=document.querySelector('#health-toast');toast.textContent='Pinging /health/live…';try{const r=await fetch('/health/live'),d=await r.json();toast.textContent=d.status==='ok'?'● API is live — round trip successful':'API responded, but is not healthy'}catch{toast.textContent='Could not reach the API'}});
+  try {
+    const options = { method, headers: { accept: 'application/json', 'x-opslab-role': roleSelect.value } };
+    if (method !== 'GET') {
+      try {
+        options.body = JSON.stringify(JSON.parse(requestJson.value));
+      } catch {
+        throw new Error('Request body must be valid JSON');
+      }
+      options.headers['content-type'] = 'application/json';
+    }
 
-const saved=JSON.parse(localStorage.getItem('opslab-lessons')||'[]');
-function progress(){const lessons=[...document.querySelectorAll('.lesson-card')],done=lessons.filter(card=>card.classList.contains('completed')),percent=lessons.length?Math.round(done.length/lessons.length*100):0;document.querySelector('#lesson-progress').style.width=percent+'%';document.querySelector('#progress-label').textContent=done.length+' of '+lessons.length+' complete';document.querySelector('#progress-percent').textContent=percent+'%';localStorage.setItem('opslab-lessons',JSON.stringify(done.map(x=>x.dataset.lesson)))}
-document.querySelectorAll('.lesson-card').forEach(card=>{if(saved.includes(card.dataset.lesson))card.classList.add('completed');const b=card.querySelector('.lesson-complete');b.textContent=card.classList.contains('completed')?'●':'○';b.addEventListener('click',()=>{card.classList.toggle('completed');b.textContent=card.classList.contains('completed')?'●':'○';b.setAttribute('aria-label',(card.classList.contains('completed')?'Mark ':'Mark ')+card.dataset.lesson+' lesson '+(card.classList.contains('completed')?'incomplete':'complete'));progress()});const expand=card.querySelector('.lesson-expand'),details=card.querySelector('.lesson-details');expand.addEventListener('click',()=>{const opening=expand.getAttribute('aria-expanded')!=='true';document.querySelectorAll('.lesson-card.open').forEach(other=>{if(other===card)return;other.classList.remove('open');other.querySelector('.lesson-details').hidden=true;other.querySelector('.lesson-expand').setAttribute('aria-expanded','false');other.querySelector('.lesson-expand span').textContent='Explore concept';other.querySelector('.lesson-expand i').textContent='+'});card.classList.toggle('open',opening);details.hidden=!opening;expand.setAttribute('aria-expanded',String(opening));expand.querySelector('span').textContent=opening?'Close explanation':'Explore concept';expand.querySelector('i').textContent=opening?'−':'+'})});progress();
-document.querySelectorAll('[data-lesson-copy]').forEach(button=>button.addEventListener('click',async()=>{await navigator.clipboard.writeText(button.dataset.lessonCopy);const label=button.querySelector('i'),original=label.textContent;label.textContent='Copied ✓';setTimeout(()=>label.textContent=original,1600)}));
-document.querySelector('.copy-command').addEventListener('click',async e=>{const b=e.currentTarget;await navigator.clipboard.writeText(b.dataset.copy);b.querySelector('span').textContent='Copied ✓';setTimeout(()=>b.querySelector('span').textContent='Copy command',1600)});
-const observer=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible')}),{threshold:.1});document.querySelectorAll('.reveal').forEach(el=>observer.observe(el));
+    const response = await fetch(path, options);
+    const isJson = (response.headers.get('content-type') || '').includes('json');
+    const data = isJson ? await response.json() : await response.text();
+    const ms = performance.now() - started;
+    const statusText = `${response.status} ${response.ok ? 'OK' : 'ERROR'}`;
+
+    time.textContent = Math.round(ms) + ' ms';
+    status.textContent = statusText;
+    status.classList.toggle('is-error', !response.ok);
+    body.innerHTML = typeof data === 'string' ? escapeHtml(data) : colourJson(data);
+    $('#response-instance').textContent = response.headers.get('x-served-by') ? `via ${response.headers.get('x-served-by')}` : '';
+    return { ms, statusText, timing: parseServerTiming(response.headers.get('server-timing')), traceId: response.headers.get('x-trace-id') };
+  } catch (error) {
+    status.textContent = 'OFFLINE';
+    status.classList.add('is-error');
+    body.textContent = error.message;
+    return null;
+  }
+}
+
+function syncPlayground() {
+  $('#endpoint-note').textContent = notes[endpointSelect.value] || '';
+  requestJson.value = methodSelect.value === 'POST' ? requestExamples[endpointSelect.value] || '{}' : '{}';
+}
+
+endpointSelect.addEventListener('change', syncPlayground);
+methodSelect.addEventListener('change', syncPlayground);
+
+$('#send-request').addEventListener('click', async () => {
+  if (await sendRequest()) markOnboarding('api');
+});
+
+$('#copy-curl').addEventListener('click', (event) => {
+  const payload = methodSelect.value === 'POST' ? ` -H "content-type: application/json" -d '${requestJson.value}'` : '';
+  const command = `curl -X ${methodSelect.value} -H "x-opslab-role: ${roleSelect.value}" ${location.origin}${endpointSelect.value}${payload}`;
+  copyText(command, event.currentTarget, 'Copy as curl');
+});
+
+$('#quick-health').addEventListener('click', async () => {
+  const toast = $('#health-toast');
+  toast.textContent = 'Pinging /health/live…';
+  try {
+    const data = await (await fetch('/health/live')).json();
+    toast.textContent = data.status === 'ok' ? '● API is live — round trip successful' : 'API responded, but is not healthy';
+  } catch {
+    toast.textContent = 'Could not reach the API';
+  }
+});
+
+/* ---------- Lessons ---------- */
+
+const lessonCards = $$('.lesson-card');
+const completedLessons = new Set(readStore('opslab-lessons', []));
+
+function renderLessonProgress() {
+  const percent = Math.round((completedLessons.size / lessonCards.length) * 100);
+  $('#lesson-progress').style.width = percent + '%';
+  $('#progress-label').textContent = `${completedLessons.size} of ${lessonCards.length} complete`;
+  $('#progress-percent').textContent = percent + '%';
+}
+
+function closeLesson(card) {
+  const expand = $('.lesson-expand', card);
+  card.classList.remove('open');
+  $('.lesson-details', card).hidden = true;
+  expand.setAttribute('aria-expanded', 'false');
+  $('span', expand).textContent = 'Explore concept';
+  $('i', expand).textContent = '+';
+}
+
+lessonCards.forEach((card) => {
+  const lesson = card.dataset.lesson;
+  const completeButton = $('.lesson-complete', card);
+  const expand = $('.lesson-expand', card);
+
+  const renderComplete = () => {
+    const done = completedLessons.has(lesson);
+    card.classList.toggle('completed', done);
+    $('i', completeButton).textContent = done ? '●' : '○';
+    $('span', completeButton).textContent = done ? 'Done' : 'Mark done';
+    completeButton.setAttribute('aria-pressed', String(done));
+  };
+
+  // Also used by the lesson quiz in learn.js to mark a lesson done.
+  card.setComplete = (done) => {
+    if (done) completedLessons.add(lesson);
+    else completedLessons.delete(lesson);
+    writeStore('opslab-lessons', [...completedLessons]);
+    renderComplete();
+    renderLessonProgress();
+    if (completedLessons.size === lessonCards.length) earnBadge('scholar');
+  };
+  completeButton.addEventListener('click', () => card.setComplete(!completedLessons.has(lesson)));
+
+  expand.addEventListener('click', () => {
+    const opening = expand.getAttribute('aria-expanded') !== 'true';
+    lessonCards.filter((other) => other !== card && other.classList.contains('open')).forEach(closeLesson);
+    if (!opening) return closeLesson(card);
+    card.classList.add('open');
+    $('.lesson-details', card).hidden = false;
+    expand.setAttribute('aria-expanded', 'true');
+    $('span', expand).textContent = 'Close explanation';
+    $('i', expand).textContent = '−';
+  });
+
+  renderComplete();
+});
+renderLessonProgress();
+
+$$('[data-lesson-copy]').forEach((button) =>
+  button.addEventListener('click', () => copyText(button.dataset.lessonCopy, $('i', button), 'Copy')),
+);
+
+$('.copy-command').addEventListener('click', (event) => {
+  const button = event.currentTarget;
+  copyText(button.dataset.copy, $('span', button), 'Copy command');
+});
+
+/* ---------- Scroll reveal ---------- */
+
+const revealObserver = new IntersectionObserver(
+  (entries) => entries.forEach((entry) => entry.isIntersecting && entry.target.classList.add('visible')),
+  // No threshold: a section taller than the viewport could never reach a fixed visible fraction.
+  { rootMargin: '0px 0px -60px 0px' },
+);
+$$('.reveal').forEach((element) => revealObserver.observe(element));

@@ -5,6 +5,11 @@ metadata:
   namespace: opslab
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: opslab-api
@@ -13,6 +18,11 @@ spec:
       labels:
         app: opslab-api
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: opslab-api
           image: opslab-api:local
@@ -30,15 +40,55 @@ spec:
                 configMapKeyRef:
                   name: opslab-config
                   key: PORT
+            - name: DATABASE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: opslab-config
+                  key: DATABASE_HOST
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: opslab-db
+                  key: password
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # CPU requests are what a HorizontalPodAutoscaler measures utilisation against.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 192Mi
+          # Gives a slow start up to 60 s before the other probes begin.
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: 3000
+            periodSeconds: 2
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /health/ready
               port: 3000
-            initialDelaySeconds: 5
-            periodSeconds: 10
+            periodSeconds: 5
+            failureThreshold: 2
           livenessProbe:
             httpGet:
               path: /health/live
               port: 3000
-            initialDelaySeconds: 10
             periodSeconds: 15
+---
+# Voluntary disruptions, such as a node drain, must leave at least one API pod running.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: opslab-api
+  namespace: opslab
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: opslab-api

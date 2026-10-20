@@ -5,6 +5,8 @@ if (-not (Get-Command kubectl -ErrorAction SilentlyContinue)) {
 }
 
 kubectl apply -f .\kubernetes\namespace.yaml
+kubectl apply -f .\kubernetes\postgres.yaml
+kubectl rollout status statefulset/postgres -n opslab --timeout=180s
 kubectl apply -f .\kubernetes\deployment.yaml
 kubectl apply -f .\kubernetes\service.yaml
 
